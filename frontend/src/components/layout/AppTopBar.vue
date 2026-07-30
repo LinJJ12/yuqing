@@ -17,7 +17,6 @@ const title = computed(() => route.meta.title || '舆情分析')
 <template>
   <header class="topbar">
     <div class="title-wrap">
-      <p class="eyebrow">Yuqing Workspace</p>
       <h1 class="title">{{ title }}</h1>
     </div>
     <div class="actions">
@@ -31,6 +30,7 @@ const title = computed(() => route.meta.title || '舆情分析')
               : 'pill-warning'
         "
       >
+        <span class="dot" aria-hidden="true" />
         {{ backendOk === true ? '服务正常' : backendOk === false ? '服务离线' : '检测中' }}
       </span>
       <button
@@ -40,7 +40,7 @@ const title = computed(() => route.meta.title || '舆情分析')
         :disabled="refreshing"
         @click="emit('refresh')"
       >
-        <RefreshCw :size="16" :class="{ spin: refreshing }" />
+        <RefreshCw :size="15" :class="{ spin: refreshing }" />
       </button>
     </div>
   </header>
@@ -54,37 +54,30 @@ const title = computed(() => route.meta.title || '舆情分析')
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0 1.6rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(14px);
+  padding: 0 1.75rem;
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
 }
 .title-wrap {
   min-width: 0;
 }
-.eyebrow {
-  margin: 0 0 0.1rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-}
 .title {
   margin: 0;
   min-width: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 650;
   letter-spacing: -0.02em;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--text-primary);
 }
 .actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   flex-shrink: 0;
 }
 .spin {

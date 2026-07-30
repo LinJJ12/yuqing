@@ -6,7 +6,10 @@ import {
   createAnalysisJob,
   fetchAnalysisJob,
   fetchAnalysisJobs,
+  fetchReviewPosts,
   fetchSentimentStats,
+  llmReviewSentiment,
+  overridePostSentiment,
   previewSentiment,
   runSentiment,
 } from '../api/client'
@@ -18,6 +21,9 @@ const error = ref('')
 const stats = ref(null)
 const sample = ref([])
 const jobs = ref([])
+const reviewPosts = ref([])
+const reviewLoading = ref(false)
+const reviewBusyId = ref(null)
 const previewText = ref('这期剪辑节奏不错，但中段广告有点长，希望能改进。')
 const previewResult = ref(null)
 const chartRef = ref(null)
@@ -28,8 +34,24 @@ const labelMap = {
   positive: '正面',
   neutral: '中性',
   negative: '负面',
+  uncertain: '不确定',
   unknown: '未标注',
 }
+
+const methodMap = {
+  bert: '模型',
+  manual: '人工',
+  llm: 'LLM',
+  lexicon: '词典',
+  provided: '导入',
+}
+
+const labelOptions = [
+  { value: 'positive', label: '正面' },
+  { value: 'neutral', label: '中性' },
+  { value: 'negative', label: '负面' },
+  { value: 'uncertain', label: '不确定' },
+]
 
 const jobStatusMap = {
   queued: '排队中',
@@ -40,7 +62,13 @@ const jobStatusMap = {
 
 const bertProgress = computed(() => {
   if (!stats.value?.total) return '0%'
-  return `${Math.round((stats.value.bert_done / stats.value.total) * 100)}%`
+  const done = stats.value.model_stale ? 0 : stats.value.bert_done
+  return `${Math.round((done / stats.value.total) * 100)}%`
+})
+
+const staleHint = computed(() => {
+  if (!stats.value?.model_stale) return ''
+  return `检测到情感模型已更换（当前 ${stats.value.model_id || ''}），点「分析待处理」或「全量重跑」即可用新模型覆盖旧标签。`
 })
 
 async function refreshJobs() {
@@ -55,7 +83,7 @@ async function onAsyncJob(kind = 'sentiment') {
   try {
     const res = await createAnalysisJob({
       kind,
-      limit: 1000,
+      limit: 5000,
       only_pending: true,
       use_bertopic: true,
     })
@@ -94,48 +122,48 @@ async function onAsyncJob(kind = 'sentiment') {
 function renderChart() {
   if (!chartRef.value || !stats.value) return
   if (!chart) chart = echarts.init(chartRef.value)
-  const bert = { positive: 0, neutral: 0, negative: 0 }
-  const lexicon = { positive: 0, neutral: 0, negative: 0 }
+  const bert = { positive: 0, neutral: 0, negative: 0, uncertain: 0 }
+  const lexicon = { positive: 0, neutral: 0, negative: 0, uncertain: 0 }
   for (const row of stats.value.breakdown || []) {
     const bucket = row.method === 'bert' ? bert : lexicon
     if (row.label in bucket) bucket[row.label] += row.count
   }
   chart.setOption({
-    color: ['#0f766e', '#99f6e4'],
+    color: ['#18181b', '#a1a1aa'],
     tooltip: { trigger: 'axis' },
     legend: {
       data: ['模型分析', '词典快筛'],
       top: 0,
       left: 'center',
-      textStyle: { color: '#475569' },
+      textStyle: { color: '#52525b' },
     },
     grid: { left: 48, right: 20, top: 48, bottom: 40 },
     xAxis: {
       type: 'category',
-      data: ['正面', '中性', '负面'],
-      axisLine: { lineStyle: { color: '#cbd5e1' } },
-      axisLabel: { color: '#64748b', margin: 12 },
+      data: ['正面', '中性', '负面', '不确定'],
+      axisLine: { lineStyle: { color: '#e4e4e7' } },
+      axisLabel: { color: '#71717a', margin: 12 },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      splitLine: { lineStyle: { color: '#eef2f7' } },
-      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: '#f4f4f5' } },
+      axisLabel: { color: '#71717a' },
     },
     series: [
       {
         name: '模型分析',
         type: 'bar',
         barMaxWidth: 28,
-        data: [bert.positive, bert.neutral, bert.negative],
-        itemStyle: { color: '#0f766e', borderRadius: [6, 6, 0, 0] },
+        data: [bert.positive, bert.neutral, bert.negative, bert.uncertain],
+        itemStyle: { color: '#18181b', borderRadius: [4, 4, 0, 0] },
       },
       {
         name: '词典快筛',
         type: 'bar',
         barMaxWidth: 28,
-        data: [lexicon.positive, lexicon.neutral, lexicon.negative],
-        itemStyle: { color: '#99f6e4', borderRadius: [6, 6, 0, 0] },
+        data: [lexicon.positive, lexicon.neutral, lexicon.negative, lexicon.uncertain],
+        itemStyle: { color: '#a1a1aa', borderRadius: [4, 4, 0, 0] },
       },
     ],
   })
@@ -149,6 +177,60 @@ async function refreshStats() {
   }
 }
 
+async function refreshReview() {
+  reviewLoading.value = true
+  try {
+    const res = await fetchReviewPosts(40)
+    if (res.ok) reviewPosts.value = res.data.items || []
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+async function onManualOverride(post, label) {
+  if (!label || (label === post.sentiment_label && post.sentiment_method === 'manual')) return
+  reviewBusyId.value = post.id
+  error.value = ''
+  try {
+    const res = await overridePostSentiment(post.id, { label, method: 'manual' })
+    if (!res.ok) {
+      error.value = res.error?.message || '改判失败'
+      return
+    }
+    const idx = reviewPosts.value.findIndex((p) => p.id === post.id)
+    if (idx >= 0) reviewPosts.value[idx] = res.data
+    message.value = `已人工改判 #${post.id} → ${labelMap[label] || label}`
+    await refreshStats()
+  } catch (e) {
+    error.value = e.message || '改判失败'
+  } finally {
+    reviewBusyId.value = null
+  }
+}
+
+async function onLlmReview(post) {
+  reviewBusyId.value = post.id
+  error.value = ''
+  message.value = `正在 LLM 复判 #${post.id}…`
+  try {
+    const res = await llmReviewSentiment({ post_id: post.id, apply: true })
+    if (!res.ok) {
+      error.value = res.error?.message || 'LLM 复判失败'
+      return
+    }
+    const updated = res.data.post || res.data
+    const idx = reviewPosts.value.findIndex((p) => p.id === post.id)
+    if (idx >= 0 && updated?.id) reviewPosts.value[idx] = updated
+    const lab = res.data.sentiment_label
+    message.value = `LLM 复判 #${post.id} → ${labelMap[lab] || lab}${res.data.reason ? `（${res.data.reason}）` : ''}`
+    await refreshStats()
+  } catch (e) {
+    error.value = e.message || 'LLM 复判失败'
+  } finally {
+    reviewBusyId.value = null
+  }
+}
+
 async function onRun(onlyPending = true) {
   loading.value = true
   error.value = ''
@@ -156,7 +238,7 @@ async function onRun(onlyPending = true) {
     ? '正在分析待处理帖子（首次可能较慢，请稍候）…'
     : '正在全量重跑情感分析…'
   try {
-    const res = await runSentiment({ limit: 1000, only_pending: onlyPending })
+    const res = await runSentiment({ limit: 5000, only_pending: onlyPending })
     if (!res.ok) {
       error.value = res.error?.message || '分析失败'
       return
@@ -165,6 +247,7 @@ async function onRun(onlyPending = true) {
     sample.value = res.data.sample || []
     message.value = `完成：更新 ${res.data.updated} 条，耗时 ${res.data.elapsed_ms} ms`
     renderChart()
+    await refreshReview()
   } catch (e) {
     error.value = e?.response?.data?.error?.message || e.message || '请求失败'
   } finally {
@@ -190,6 +273,7 @@ onMounted(async () => {
   try {
     await refreshStats()
     await refreshJobs()
+    await refreshReview()
   } catch {
     error.value = '无法连接后端'
   }
@@ -211,8 +295,9 @@ onUnmounted(() => {
         <h2>情感分析</h2>
       </div>
       <p class="hint">
-        输出正面 / 中性 / 负面。首次运行可能需要加载模型，请稍候。也可提交后台任务异步执行。
+        默认微博域三分类模型，输出正面 / 中性 / 负面（低置信为不确定）。入库不再写词典情感；采集后会自动排队 BERT。也可提交后台任务异步执行。
       </p>
+      <p v-if="staleHint" class="warn-text">{{ staleHint }}</p>
       <div class="actions">
         <button type="button" class="btn btn-primary" :disabled="loading || jobLoading" @click="onRun(true)">
           <Play :size="16" />
@@ -241,6 +326,10 @@ onUnmounted(() => {
         <div class="kpi">
           <div class="kpi-label"><span>待处理</span></div>
           <div class="kpi-value warn">{{ stats.pending }}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label"><span>不确定</span></div>
+          <div class="kpi-value">{{ stats.uncertain ?? 0 }}</div>
         </div>
         <div class="kpi">
           <div class="kpi-label"><span>进度</span></div>
@@ -284,6 +373,55 @@ onUnmounted(() => {
       </p>
     </section>
 
+    <section class="panel">
+      <div class="panel-head">
+        <h3>难例改判</h3>
+        <button type="button" class="btn btn-ghost" :disabled="reviewLoading" @click="refreshReview">
+          刷新
+        </button>
+      </div>
+      <p class="hint">
+        优先列出不确定 / 低置信评论。可手动改判，或一键 LLM 复判；人工与 LLM 结果不会被后续 BERT 覆盖。
+      </p>
+      <div v-if="reviewPosts.length" class="post-list">
+        <article v-for="item in reviewPosts" :key="item.id" class="post-item">
+          <header class="post-meta">
+            <b>#{{ item.id }}</b>
+            <span class="pill pill-default">
+              {{ labelMap[item.sentiment_label] || item.sentiment_label || '未标注' }}
+            </span>
+            <span class="pill pill-default">
+              {{ methodMap[item.sentiment_method] || item.sentiment_method || '—' }}
+            </span>
+            <em v-if="item.sentiment_confidence != null">置信 {{ item.sentiment_confidence }}</em>
+          </header>
+          <p>{{ item.text }}</p>
+          <div class="review-actions">
+            <select
+              class="input review-select"
+              :value="item.sentiment_label || ''"
+              :disabled="reviewBusyId === item.id"
+              @change="onManualOverride(item, $event.target.value)"
+            >
+              <option disabled value="">改判为…</option>
+              <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              :disabled="reviewBusyId === item.id"
+              @click="onLlmReview(item)"
+            >
+              LLM 复判
+            </button>
+          </div>
+        </article>
+      </div>
+      <p v-else class="hint">{{ reviewLoading ? '加载中…' : '暂无待复核帖子' }}</p>
+    </section>
+
     <section v-if="sample.length" class="panel">
       <div class="panel-head">
         <h3>本次样例</h3>
@@ -312,5 +450,16 @@ onUnmounted(() => {
   margin-top: 0.75rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+.review-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.55rem;
+  align-items: center;
+}
+.review-select {
+  max-width: 9rem;
+  min-height: 2.1rem;
 }
 </style>

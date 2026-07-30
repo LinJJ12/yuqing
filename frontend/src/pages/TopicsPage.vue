@@ -21,14 +21,14 @@ const dbTopics = computed(() => result.value?.db_topics || [])
 const docCount = computed(() => result.value?.document_count ?? 0)
 
 const palette = [
+  '#18181b',
+  '#3f3f46',
+  '#52525b',
+  '#71717a',
+  '#16a34a',
+  '#dc2626',
+  '#d97706',
   '#0f766e',
-  '#0d9488',
-  '#14b8a6',
-  '#2dd4bf',
-  '#115e59',
-  '#0e7490',
-  '#0369a1',
-  '#334155',
 ]
 
 function colorFor(name) {
@@ -74,7 +74,7 @@ function renderWordCloud(list) {
             focus: 'self',
             textStyle: {
               textShadowBlur: 8,
-              textShadowColor: 'rgba(15, 118, 110, 0.35)',
+              textShadowColor: 'rgba(24, 24, 27, 0.25)',
             },
           },
           data,
@@ -105,8 +105,8 @@ function renderRank(list) {
       xAxis: {
         type: 'value',
         minInterval: 1,
-        splitLine: { lineStyle: { color: '#eef2f7' } },
-        axisLabel: { color: '#94a3b8' },
+        splitLine: { lineStyle: { color: '#f4f4f5' } },
+        axisLabel: { color: '#a1a1aa' },
         axisLine: { show: false },
         axisTick: { show: false },
       },
@@ -116,7 +116,7 @@ function renderRank(list) {
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
-          color: '#334155',
+          color: '#3f3f46',
           fontWeight: 600,
           width: 60,
           overflow: 'truncate',
@@ -128,16 +128,13 @@ function renderRank(list) {
           data: values,
           barMaxWidth: 14,
           itemStyle: {
-            borderRadius: [0, 8, 8, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: '#99f6e4' },
-              { offset: 1, color: '#0f766e' },
-            ]),
+            borderRadius: [0, 6, 6, 0],
+            color: '#18181b',
           },
           label: {
             show: true,
             position: 'right',
-            color: '#64748b',
+            color: '#71717a',
             fontSize: 11,
             fontWeight: 600,
           },
@@ -353,9 +350,9 @@ onBeforeUnmount(() => {
 .stat {
   min-width: 4.5rem;
   padding: 0.45rem 0.7rem;
-  border-radius: 12px;
-  background: rgba(15, 118, 110, 0.06);
-  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-border);
   text-align: center;
 }
 .stat span {
@@ -388,10 +385,8 @@ onBeforeUnmount(() => {
 .wordcloud-box {
   height: 420px;
   width: 100%;
-  border-radius: 14px;
-  background:
-    radial-gradient(ellipse 50% 45% at 50% 45%, rgba(20, 184, 166, 0.08), transparent 70%),
-    #f8fafc;
+  border-radius: var(--radius-lg);
+  background: var(--bg-tertiary);
   border: 1px solid var(--color-border);
 }
 .main-grid {
@@ -419,7 +414,7 @@ onBeforeUnmount(() => {
   gap: 0.55rem;
   align-items: center;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
 }
 .rank-list li:last-child {
   border-bottom: none;
@@ -471,9 +466,9 @@ onBeforeUnmount(() => {
 }
 .topic-card {
   padding: 0.85rem 0.95rem;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(15, 118, 110, 0.05), transparent 70%);
-  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-border);
 }
 .topic-card header {
   display: flex;

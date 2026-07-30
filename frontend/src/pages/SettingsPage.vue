@@ -264,18 +264,18 @@ onMounted(refresh)
 }
 .ready-card {
   padding: 0.85rem 1rem;
-  border: 1px solid var(--bg-tertiary, #e2e8f0);
-  border-radius: 8px;
-  background: var(--bg-secondary, #f8fafc);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
 }
 .ready-card.ok {
-  border-color: #86efac;
+  border-color: rgba(22, 163, 74, 0.35);
 }
 .ready-card.pending {
-  border-color: #fde68a;
+  border-color: rgba(217, 119, 6, 0.4);
 }
 .ready-card.bad {
-  border-color: #fca5a5;
+  border-color: rgba(220, 38, 38, 0.35);
 }
 .ready-card header {
   display: flex;
@@ -308,7 +308,8 @@ onMounted(refresh)
   line-height: 1.55;
 }
 .pill-ok {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--color-success);
+  border: 1px solid rgba(22, 163, 74, 0.2);
 }
 </style>

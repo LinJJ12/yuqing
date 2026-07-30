@@ -53,7 +53,7 @@ function isActive(item) {
         :class="{ active: isActive(item) }"
         :title="collapsed ? item.label : undefined"
       >
-        <component :is="item.icon" :size="18" :stroke-width="1.85" class="nav-icon" />
+        <component :is="item.icon" :size="18" :stroke-width="1.75" class="nav-icon" />
         <span v-show="!collapsed" class="nav-label">{{ item.label }}</span>
       </RouterLink>
     </nav>
@@ -80,10 +80,8 @@ function isActive(item) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border-right: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(14px);
-  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.03);
+  border-right: 1px solid var(--color-border);
+  background: #fff;
 }
 .sidebar.collapsed {
   width: var(--sidebar-w-collapsed);
@@ -94,22 +92,21 @@ function isActive(item) {
   align-items: center;
   gap: 0.7rem;
   padding: 0 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid var(--color-border);
   overflow: hidden;
 }
 .brand-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
   color: #fff;
   font-weight: 800;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   line-height: 1;
-  background: linear-gradient(145deg, #14b8a6 0%, #0f766e 70%);
-  box-shadow: 0 6px 14px rgba(15, 118, 110, 0.28);
+  background: linear-gradient(145deg, #14b8a6 0%, #0f766e 75%);
 }
 .brand-text {
   min-width: 0;
@@ -117,15 +114,15 @@ function isActive(item) {
 }
 .brand-text strong {
   display: block;
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   white-space: nowrap;
 }
 .brand-text small {
   display: block;
   color: var(--text-tertiary);
-  font-size: 0.68rem;
+  font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -133,33 +130,43 @@ function isActive(item) {
 .nav {
   flex: 1;
   min-height: 0;
-  padding: 0.85rem 0.7rem;
+  padding: 0.75rem 0.6rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  height: 42px;
-  padding: 0 0.85rem;
-  border-radius: 12px;
+  height: 38px;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   text-decoration: none;
-  transition: background 150ms, color 150ms, box-shadow 150ms, transform 150ms;
+  transition: background 120ms, color 120ms;
   cursor: pointer;
 }
 .nav-item:hover {
-  background: rgba(15, 118, 110, 0.06);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 .nav-item.active {
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.16), rgba(15, 118, 110, 0.1));
-  color: var(--color-primary);
-  font-weight: 700;
-  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.12);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 650;
+}
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-primary);
 }
 .nav-icon {
   flex-shrink: 0;
@@ -172,20 +179,23 @@ function isActive(item) {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 .sidebar.collapsed .nav-item {
   justify-content: center;
   padding: 0;
 }
+.sidebar.collapsed .nav-item.active::before {
+  display: none;
+}
 .sidebar-foot {
-  padding: 0.65rem;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  padding: 0.55rem;
+  border-top: 1px solid var(--color-border);
 }
 .collapse-btn {
   width: 100%;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 @media (max-width: 800px) {
@@ -202,6 +212,9 @@ function isActive(item) {
   }
   .nav-item {
     flex: 0 0 auto;
+  }
+  .nav-item.active::before {
+    display: none;
   }
   .sidebar.collapsed .nav-item {
     padding: 0 0.75rem;

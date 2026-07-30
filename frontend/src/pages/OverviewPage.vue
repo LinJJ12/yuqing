@@ -17,6 +17,7 @@ const sentimentMap = {
   positive: '正面',
   neutral: '中性',
   negative: '负面',
+  uncertain: '不确定',
   unknown: '未标注',
 }
 
@@ -24,6 +25,7 @@ const sentimentPill = {
   positive: 'pill-success',
   neutral: 'pill-default',
   negative: 'pill-danger',
+  uncertain: 'pill-warning',
   unknown: 'pill-warning',
 }
 

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Download, ExternalLink, Upload } from '@lucide/vue'
-import { collectBilibili, deletePosts, fetchImports, fetchOverview, fetchPosts, uploadImport } from '../api/client'
+import { collectBilibili, deletePosts, fetchImports, fetchOverview, fetchPosts, overridePostSentiment, uploadImport } from '../api/client'
 
 const file = ref(null)
 const topic = ref('')
@@ -44,6 +44,15 @@ const platforms = [
   { value: 'bili', label: 'B站 (bili)' },
 ]
 
+const sentimentOptions = [
+  { value: 'positive', label: '正面' },
+  { value: 'neutral', label: '中性' },
+  { value: 'negative', label: '负面' },
+  { value: 'uncertain', label: '不确定' },
+]
+
+const sentimentBusyId = ref(null)
+
 const filterOptions = computed(() => {
   const map = Object.fromEntries(platformStats.value.map((x) => [x.platform, x.count]))
   return [
@@ -73,6 +82,26 @@ function videoBvid(post) {
 
 function formatTime(post) {
   return post.fetched_at || post.published_at || '—'
+}
+
+async function onSentimentOverride(post, label) {
+  if (!label || (label === post.sentiment_label && post.sentiment_method === 'manual')) return
+  sentimentBusyId.value = post.id
+  error.value = ''
+  try {
+    const res = await overridePostSentiment(post.id, { label, method: 'manual' })
+    if (!res.ok) {
+      error.value = res.error?.message || '改判失败'
+      return
+    }
+    const idx = posts.value.findIndex((p) => p.id === post.id)
+    if (idx >= 0) posts.value[idx] = res.data
+    message.value = `已改判 #${post.id}`
+  } catch (e) {
+    error.value = e.message || '改判失败'
+  } finally {
+    sentimentBusyId.value = null
+  }
 }
 
 async function refresh() {
@@ -457,7 +486,18 @@ onMounted(async () => {
           <header class="post-meta">
             <b>{{ post.topic || '未分类' }}</b>
             <span class="pill pill-default">{{ platformLabel(post.platform) }}</span>
-            <span class="pill pill-default">{{ post.sentiment_label || '未分析' }}</span>
+            <select
+              class="input sentiment-select"
+              :value="post.sentiment_label || ''"
+              :disabled="sentimentBusyId === post.id"
+              title="手动改判情感"
+              @change="onSentimentOverride(post, $event.target.value)"
+            >
+              <option value="" disabled>未分析</option>
+              <option v-for="opt in sentimentOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}{{ post.sentiment_method === 'manual' && post.sentiment_label === opt.value ? ' ·人工' : '' }}
+              </option>
+            </select>
             <em>{{ post.author || '匿名' }}</em>
             <em>{{ formatTime(post) }}</em>
           </header>
@@ -519,7 +559,7 @@ onMounted(async () => {
 .clean-box {
   margin-top: 1rem;
   padding-top: 0.85rem;
-  border-top: 1px dashed rgba(148, 163, 184, 0.55);
+  border-top: 1px dashed var(--color-border-strong);
 }
 .clean-title {
   margin: 0 0 0.35rem;
@@ -580,6 +620,14 @@ onMounted(async () => {
   font-size: 0.8rem;
   color: var(--text-tertiary);
 }
+.sentiment-select {
+  width: auto;
+  min-width: 5.5rem;
+  max-width: 7.5rem;
+  min-height: 1.85rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.8rem;
+}
 .post-actions {
   margin-top: 0.45rem;
   display: flex;
@@ -603,8 +651,8 @@ onMounted(async () => {
   max-height: min(52vh, 28rem);
   overflow: auto;
   padding-right: 0.25rem;
-  border-top: 1px solid var(--bg-tertiary);
-  border-radius: 0 0 12px 12px;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 @media (max-width: 900px) {
   .post-scroll {

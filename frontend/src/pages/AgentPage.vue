@@ -235,19 +235,22 @@ onMounted(async () => {
 }
 .answer-text.brief {
   padding: 0.85rem 1rem;
-  background: var(--bg-secondary, #f8fafc);
-  border-left: 3px solid #1e40af;
+  background: var(--bg-tertiary);
+  border-left: 2px solid var(--color-primary);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 .digest {
   margin-top: 0.5rem;
   padding: 0.75rem;
   font-size: 0.78rem;
   overflow: auto;
-  background: var(--bg-tertiary, #eef2f7);
-  border-radius: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 .pill-ok {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--color-success);
+  border: 1px solid rgba(22, 163, 74, 0.2);
 }
 </style>

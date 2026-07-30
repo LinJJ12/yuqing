@@ -28,6 +28,7 @@ const labelMap = {
   positive: '正面',
   neutral: '中性',
   negative: '负面',
+  uncertain: '不确定',
   unknown: '未标注',
 }
 const methodMap = {
@@ -129,6 +130,29 @@ async function onAiSummary() {
     }
   } catch (e) {
     error.value = e.message || 'AI 摘要失败'
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+async function onVideoAiConclusion() {
+  const key = (videoReport.value?.bvid || activeBvid.value || bvidInput.value || '').trim()
+  if (!key) {
+    error.value = '请先选择或填写 BV 号'
+    return
+  }
+  aiLoading.value = true
+  error.value = ''
+  try {
+    const res = await fetchVideoReport(key, { with_ai: true })
+    if (!res.ok) throw new Error(res.error?.message || 'AI 口碑失败')
+    videoReport.value = res.data
+    bvidInput.value = res.data.bvid || key
+    if (res.data?.ai && !res.data.ai.summary) {
+      error.value = res.data.ai.message || 'AI 口碑不可用'
+    }
+  } catch (e) {
+    error.value = e.message || 'AI 口碑失败'
   } finally {
     aiLoading.value = false
   }
@@ -259,7 +283,34 @@ onMounted(refresh)
           </a>
         </p>
 
-        <div class="conclusion">{{ videoReport.conclusion }}</div>
+        <div class="conclusion-head">
+          <span class="conclusion-badge" :class="videoReport.conclusion_source === 'llm' ? 'ai' : 'rule'">
+            {{ videoReport.conclusion_source === 'llm' ? 'AI 观众反馈' : '规则摘要' }}
+          </span>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            :disabled="aiLoading || loading || !(videoReport.overview?.total_posts > 0)"
+            @click="onVideoAiConclusion"
+          >
+            <Sparkles :size="14" />
+            {{ aiLoading ? '生成中…' : 'AI 生成观众反馈' }}
+          </button>
+        </div>
+        <div class="conclusion" :class="{ 'conclusion-ai': videoReport.conclusion_source === 'llm' }">
+          {{ videoReport.conclusion }}
+        </div>
+        <details
+          v-if="
+            videoReport.conclusion_source === 'llm' &&
+            videoReport.rule_conclusion &&
+            videoReport.rule_conclusion !== videoReport.conclusion
+          "
+          class="rule-snap"
+        >
+          <summary>数据速览（规则摘要）</summary>
+          <p>{{ videoReport.rule_conclusion }}</p>
+        </details>
 
         <div class="kpi-grid">
           <div class="kpi">
@@ -403,18 +454,19 @@ onMounted(refresh)
 .chip {
   max-width: 100%;
   text-align: left;
-  border: 1px solid rgba(148, 163, 184, 0.45);
+  border: 1px solid var(--color-border);
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 0.45rem 0.65rem;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  transition: border-color 120ms, background 120ms;
 }
 .chip.active {
-  border-color: #166534;
-  background: #f0fdf4;
+  border-color: var(--color-primary);
+  background: var(--bg-tertiary);
 }
 .chip-title {
   font-size: 0.82rem;
@@ -431,10 +483,61 @@ onMounted(refresh)
 .conclusion {
   margin: 0.5rem 0 1rem;
   padding: 0.9rem 1rem;
-  background: linear-gradient(135deg, #f8fafc, #f0fdf4);
-  border-left: 3px solid #166534;
+  background: var(--bg-tertiary);
+  border-left: 2px solid var(--color-success);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
   line-height: 1.7;
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+.conclusion-ai {
+  background: var(--bg-tertiary);
+  border-left-color: var(--color-primary);
+}
+.conclusion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+.conclusion-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--color-border);
+}
+.conclusion-badge.ai {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.conclusion-badge.rule {
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--color-success);
+  border-color: rgba(22, 163, 74, 0.2);
+}
+.rule-snap {
+  margin: -0.4rem 0 1rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+.rule-snap summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.rule-snap p {
+  margin: 0.5rem 0 0;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 .video-line {
   display: flex;
@@ -446,9 +549,13 @@ onMounted(refresh)
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  color: #1d4ed8;
+  color: var(--text-primary);
   text-decoration: none;
   font-size: 0.82rem;
+  font-weight: 600;
+}
+.ext:hover {
+  text-decoration: underline;
 }
 .tags {
   display: flex;
@@ -459,9 +566,10 @@ onMounted(refresh)
 .tag {
   font-size: 0.78rem;
   padding: 0.2rem 0.5rem;
-  border-radius: 999px;
-  background: #f1f5f9;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
+  border: 1px solid var(--color-border);
 }
 .sample-list {
   list-style: none;
@@ -473,8 +581,8 @@ onMounted(refresh)
 }
 .sample-list li {
   padding: 0.65rem 0.75rem;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   background: #fff;
 }
 .sample-list p {
@@ -522,8 +630,9 @@ onMounted(refresh)
 .ai-box {
   margin: 0.35rem 0 1rem;
   padding: 0.85rem 1rem;
-  background: var(--bg-secondary, #f8fafc);
-  border-left: 3px solid #1e40af;
+  background: var(--bg-tertiary);
+  border-left: 2px solid var(--color-primary);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
   color: var(--text-secondary);
   line-height: 1.65;
   white-space: pre-wrap;
