@@ -106,7 +106,7 @@ class TopicAnalyzer:
                     self._embedder.encode(["连通性测试"])
                 else:
                     if settings.hf_endpoint:
-                        os.environ.setdefault("HF_ENDPOINT", settings.hf_endpoint)
+                        os.environ["HF_ENDPOINT"] = settings.hf_endpoint.rstrip("/")
                     from sentence_transformers import SentenceTransformer
 
                     device = resolve_device(settings.device_preference)

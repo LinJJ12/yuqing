@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from pydantic import AliasChoices, Field
@@ -32,12 +33,16 @@ class Settings(BaseSettings):
         "http://localhost:5173",
     ]
 
-    # 情感：二分类中文 RoBERTa + 置信度间隔 → 正/中/负
-    sentiment_model_id: str = "uer/roberta-base-finetuned-dianping-chinese"
+    # 情感：默认真三分类中文 BERT（微博域，更贴近短评/弹幕）
+    # 若换回二分类（如 uer/roberta-base-finetuned-dianping-chinese），
+    # 仍可用下方阈值/间隔推断中性。
+    sentiment_model_id: str = "senlou/weibo-sentiment-chinese-bert"
     device_preference: str = "cuda"
     sentiment_batch_size: int = 32
     sentiment_neutral_threshold: float = 0.62
     sentiment_neutral_margin: float = 0.12
+    # 最高类概率低于此值 → uncertain（仍 method=bert）
+    sentiment_uncertain_threshold: float = 0.55
 
     # 向量：默认本机 Ollama
     embedding_backend: str = "ollama"  # ollama | huggingface
@@ -61,20 +66,28 @@ class Settings(BaseSettings):
         "校园网",
         "后勤",
     ]
+    # 默认预警词：偏 B 站口碑 / 内容槽点（设置页可覆盖）
     default_alert_keywords: list[str] = [
-        "投诉",
+        "劝退",
         "差评",
-        "故障",
-        "不满",
-        "恶心",
+        "翻车",
+        "塌房",
+        "抄袭",
+        "注水",
+        "水文",
+        "浪费时间",
+        "看不下去",
+        "尴尬",
         "离谱",
         "失望",
-        "崩溃",
-        "排队久",
-        "脏乱",
-        "难吃",
-        "拖延",
-        "态度差",
+        "恶心",
+        "投诉",
+        "骗人",
+        "虚假",
+        "引战",
+        "崩坏",
+        "太烂",
+        "烂尾",
     ]
 
     # 云端 LLM：OpenAI 兼容（火山 / 百炼 / DeepSeek / 官方等）
@@ -129,3 +142,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# huggingface_hub 在 import 时读取 HF_ENDPOINT 并缓存；必须在首次 import transformers 之前写入。
+# settings.hf_endpoint 已合并 .env，此处强制同步到进程环境。
+if settings.hf_endpoint:
+    os.environ["HF_ENDPOINT"] = settings.hf_endpoint.rstrip("/")

@@ -9,6 +9,7 @@ from pathlib import Path
 from src.config.settings import settings
 from src.storage.db import get_store
 from src.services.normalize import normalize_post
+from src.services.jobs import enqueue_pending_sentiment
 
 
 def load_records(path: Path) -> list[dict]:
@@ -75,6 +76,13 @@ def import_file(
                 errors.append(f"第{idx + 1}条: {exc}")
 
     inserted = store.insert_posts(job["id"], accepted)
+    sentiment_job_id = None
+    if inserted > 0:
+        try:
+            job_sent = enqueue_pending_sentiment(limit=max(inserted, 500))
+            sentiment_job_id = job_sent.get("id")
+        except Exception:
+            sentiment_job_id = None
     stats = {
         "total": len(raw_records),
         "accepted": len(accepted),
@@ -82,5 +90,6 @@ def import_file(
         "duplicates": max(len(accepted) - inserted, 0),
         "rejected": rejected,
         "errors": errors,
+        "sentiment_job_id": sentiment_job_id,
     }
     return store.finish_import_job(job["id"], status="succeeded", stats=stats)

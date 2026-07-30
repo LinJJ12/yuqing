@@ -62,11 +62,11 @@ Content-Type: application/json
 | 项 | 说明 |
 |----|------|
 | 列表 | `GET /api/v1/reports/videos` |
-| 详情 | `GET /api/v1/reports/video?bvid=BV…`（也支持视频链接） |
+| 详情 | `GET /api/v1/reports/video?bvid=BV…`（也支持视频链接）；`with_ai=true` 或 `POST` 带 `with_ai` 可生成 LLM 结论 |
 | 服务 | `backend/src/services/video_report.py` |
 | 前端 | 报告页「单视频口碑」；监测页评论卡片「查看口碑」 |
 
-报告内容：情感占比、高频词、敏感/负面样例、规则生成的观众反馈结论。
+报告内容：情感占比、高频词、敏感/负面样例；默认 **规则摘要**，可点「AI 生成观众反馈」调用云端/Ollama 重写（规则摘要仍可折叠查看）。
 
 助手页可填同一 BV，生成「观众反馈」问答/简报（`POST /agent/chat|brief` 传 `bvid`）。
 

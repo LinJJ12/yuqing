@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter, defaultdict
 from typing import Any
 
 from src.services.bilibili_collect import normalize_bvid
-from src.services.forecast import get_alert_keywords
+from src.services.forecast import alert_from_post, get_alert_keywords
 from src.services.topics import get_topic_analyzer
 from src.storage.db import get_store
 
@@ -66,6 +67,7 @@ def _rule_conclusion(
     pos = by_label.get("positive", 0)
     neu = by_label.get("neutral", 0)
     neg = by_label.get("negative", 0)
+    unc = by_label.get("uncertain", 0)
     pos_r = pos / total
     neg_r = neg / total
     if neg_r >= 0.45:
@@ -79,8 +81,9 @@ def _rule_conclusion(
 
     parts = [
         f"共分析 {total} 条评论：正面 {pos}（{pos_r:.0%}）、"
-        f"中性 {neu}（{neu / total:.0%}）、负面 {neg}（{neg_r:.0%}）。"
-        f"{tone}。"
+        f"中性 {neu}（{neu / total:.0%}）、负面 {neg}（{neg_r:.0%}）"
+        + (f"、不确定 {unc}（{unc / total:.0%}）" if unc else "")
+        + f"。{tone}。"
     ]
     if top_words:
         words = "、".join(str(w.get("name")) for w in top_words[:6] if w.get("name"))
@@ -101,42 +104,28 @@ def _scoped_alerts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     keywords = get_alert_keywords()
     alerts: list[dict[str, Any]] = []
     for post in posts:
-        label = post.get("sentiment_label")
-        text = post.get("text") or ""
-        hit = [w for w in keywords if w in text]
-        if label != "negative" and not hit:
-            continue
-        if label == "negative" and hit:
-            severity = "high"
-        elif label == "negative":
-            severity = "medium"
-        else:
-            severity = "low"
-        alerts.append(
-            {
-                "id": f"post-{post['id']}",
-                "type": "negative_content",
-                "severity": severity,
-                "title": f"负面/敏感评论 · {post.get('author') or '匿名'}",
-                "message": text[:120],
-                "keywords": hit,
-                "created_at": post.get("fetched_at") or post.get("published_at"),
-                "post_id": post["id"],
-            }
-        )
+        item = alert_from_post(post, keywords, title_prefix="负面/敏感评论")
+        if item:
+            alerts.append(item)
     severity_rank = {"high": 0, "medium": 1, "low": 2}
     alerts.sort(key=lambda a: (severity_rank.get(a["severity"], 9), a.get("created_at") or ""))
     return alerts[:30]
 
 
-def build_video_report(bvid_or_url: str, *, sample_limit: int = 8) -> dict[str, Any]:
+def build_video_report(
+    bvid_or_url: str,
+    *,
+    sample_limit: int = 8,
+    with_ai: bool = False,
+) -> dict[str, Any]:
     bvid = normalize_bvid(bvid_or_url) or (bvid_or_url or "").strip()
     if not bvid:
         raise ValueError("请提供有效的 BV 号或视频链接")
 
+    empty_conclusion = "暂无该视频的评论数据，请先在监测页按 BV 采集。"
     posts = get_store().list_posts_by_bvid(bvid, limit=2000)
     if not posts:
-        return {
+        report = {
             "bvid": bvid,
             "video_title": "",
             "aid": None,
@@ -153,12 +142,17 @@ def build_video_report(bvid_or_url: str, *, sample_limit: int = 8) -> dict[str, 
             "keyword_topics": [],
             "alerts": {"items": [], "total": 0, "high": 0},
             "sample_posts": [],
-            "conclusion": "暂无该视频的评论数据，请先在监测页按 BV 采集。",
+            "rule_conclusion": empty_conclusion,
+            "conclusion": empty_conclusion,
+            "conclusion_source": "rule",
             "notes": [
                 "范围：raw.extra.bvid 匹配的评论。",
-                "可先到监测页贴 BV 采集，再到情感页跑 BERT 提升标注质量。",
+                "采集入库后会自动排队 BERT；也可在情感页全量重跑。",
             ],
         }
+        if with_ai:
+            return apply_video_ai_conclusion(report)
+        return report
 
     first = posts[0]
     extra = (first.get("raw") or {}).get("extra") or {}
@@ -224,7 +218,7 @@ def build_video_report(bvid_or_url: str, *, sample_limit: int = 8) -> dict[str, 
         keyword_hits=keyword_hits,
     )
 
-    return {
+    report = {
         "bvid": bvid,
         "video_title": video_title,
         "aid": aid,
@@ -246,10 +240,143 @@ def build_video_report(bvid_or_url: str, *, sample_limit: int = 8) -> dict[str, 
             "high": sum(1 for a in alerts if a["severity"] == "high"),
         },
         "sample_posts": samples,
+        "rule_conclusion": conclusion,
         "conclusion": conclusion,
+        "conclusion_source": "rule",
         "notes": [
             f"范围：bvid={bvid} 下 {len(posts)} 条评论。",
-            "结论为规则摘要；可到助手页结合库内数据追问细节。",
-            "情感以已写入库的标注为准；未跑 BERT 时多为词典结果。",
+            "默认结论为规则摘要；可点「AI 生成观众反馈」调用 LLM 重写。",
+            "情感以库内标注为准；BERT 低置信为 uncertain；未跑 BERT 时预警降权。",
         ],
     }
+    if with_ai:
+        return apply_video_ai_conclusion(report)
+    return report
+
+
+def generate_video_ai_conclusion(report: dict[str, Any]) -> dict[str, Any]:
+    """基于口碑统计与样例调用 LLM，生成差异化观众反馈（云端或 Ollama）。"""
+    if not (report.get("overview") or {}).get("total_posts"):
+        return {
+            "enabled": False,
+            "summary": None,
+            "message": "暂无评论，无法生成 AI 口碑",
+            "provider": None,
+            "model": None,
+        }
+
+    payload = {
+        "bvid": report.get("bvid"),
+        "video_title": report.get("video_title"),
+        "overview": report.get("overview"),
+        "sentiment": {
+            "by_label": (report.get("sentiment") or {}).get("by_label"),
+            "bert_done": (report.get("sentiment") or {}).get("bert_done"),
+            "total": (report.get("sentiment") or {}).get("total"),
+        },
+        "word_cloud": (report.get("word_cloud") or [])[:12],
+        "keyword_topics": (report.get("keyword_topics") or [])[:6],
+        "alerts": {
+            "total": (report.get("alerts") or {}).get("total"),
+            "high": (report.get("alerts") or {}).get("high"),
+            "samples": [
+                {"severity": a.get("severity"), "message": a.get("message")}
+                for a in ((report.get("alerts") or {}).get("items") or [])[:5]
+            ],
+        },
+        "sample_posts": [
+            {
+                "sentiment_label": p.get("sentiment_label"),
+                "text": p.get("text"),
+                "likes": p.get("likes"),
+            }
+            for p in (report.get("sample_posts") or [])[:8]
+        ],
+        "rule_conclusion": report.get("rule_conclusion") or report.get("conclusion"),
+    }
+    system = (
+        "你是 B 站视频观众反馈分析师。根据给定统计与评论样例，写一段 180～320 字中文"
+        "「观众反馈」口碑结论。要求：\n"
+        "1) 点明总体口碑倾向，并引用具体比例或样例槽点/亮点（勿编造未出现的内容）；\n"
+        "2) 归纳 2～4 个具体争议点或好评点，避免空泛套话；\n"
+        "3) 结尾给 UP/运营 1～2 条可执行建议；\n"
+        "4) 不要使用「根据以上数据」「综上所述」等套话开头，直接写结论。"
+    )
+    user = (
+        "视频口碑材料（JSON）：\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+        + "\n\n请直接输出观众反馈正文。"
+    )
+    try:
+        # 懒加载，避免与 agent.build_opinion_context 循环导入
+        from src.services.agent import AgentUnavailableError, chat_completion
+    except Exception as exc:
+        return {
+            "enabled": False,
+            "summary": None,
+            "message": f"无法加载 LLM 模块: {exc}",
+            "provider": None,
+            "model": None,
+        }
+
+    try:
+        result = chat_completion(system=system, user=user, history=None, max_tokens=900)
+        text = (result.get("content") or "").strip()
+        if not text:
+            return {
+                "enabled": True,
+                "summary": None,
+                "message": "模型返回空内容",
+                "provider": result.get("provider"),
+                "model": result.get("model"),
+            }
+        return {
+            "enabled": True,
+            "summary": text,
+            "message": "ok",
+            "provider": result.get("provider"),
+            "model": result.get("model"),
+        }
+    except AgentUnavailableError as exc:
+        return {
+            "enabled": False,
+            "summary": None,
+            "message": str(exc),
+            "provider": None,
+            "model": None,
+        }
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "summary": None,
+            "message": str(exc),
+            "provider": None,
+            "model": None,
+        }
+
+
+def apply_video_ai_conclusion(report: dict[str, Any]) -> dict[str, Any]:
+    """把 AI 结论写回报告；失败则保留规则结论。"""
+    out = dict(report)
+    if "rule_conclusion" not in out:
+        out["rule_conclusion"] = out.get("conclusion")
+    ai = generate_video_ai_conclusion(out)
+    out["ai"] = ai
+    if ai.get("summary"):
+        out["conclusion"] = ai["summary"]
+        out["conclusion_source"] = "llm"
+        notes = list(out.get("notes") or [])
+        notes = [n for n in notes if "规则摘要" not in n and "AI 生成" not in n]
+        notes.insert(
+            0,
+            f"结论来源：LLM（{ai.get('provider')}/{ai.get('model')}）。下方「数据速览」为规则摘要。",
+        )
+        out["notes"] = notes
+    else:
+        out["conclusion_source"] = "rule"
+        out.setdefault("notes", [])
+        msg = ai.get("message") or "AI 不可用"
+        if not any(msg in str(n) for n in out["notes"]):
+            out["notes"] = [f"AI 口碑未生成：{msg}", *out["notes"]]
+    return out
+

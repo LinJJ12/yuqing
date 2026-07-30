@@ -22,6 +22,7 @@ from src.services.bilibili_quality import (
     filter_video_candidates,
 )
 from src.services.normalize import normalize_post
+from src.services.jobs import enqueue_pending_sentiment
 from src.storage.db import get_store
 
 UA = (
@@ -588,6 +589,12 @@ def collect_bilibili(
                                 "platform": "bili",
                                 "topic": topic_clean,
                                 "source_url": target.get("url"),
+                                "extra": {
+                                    "video_title": target.get("title") or "",
+                                    "bvid": target.get("bvid") or "",
+                                    "aid": aid,
+                                    "kind": "video_title",
+                                },
                             },
                             platform="bili",
                             topic=topic_clean,
@@ -618,7 +625,21 @@ def collect_bilibili(
             )
 
         inserted = store.insert_posts(job["id"], all_posts)
+        sentiment_job = None
+        if inserted > 0:
+            try:
+                sentiment_job = enqueue_pending_sentiment(limit=max(inserted, 500))
+                notes_pending = True
+            except Exception:
+                notes_pending = False
+                sentiment_job = None
+        else:
+            notes_pending = False
         notes: list[str] = []
+        if notes_pending and sentiment_job:
+            notes.append(
+                f"已自动排队情感分析任务 {sentiment_job.get('id', '')[:8]}…（仅待处理）"
+            )
         if not _has_sessdata():
             notes.append("未配置 BILIBILI_SESSDATA，评论量可能偏少，建议在 backend/.env 填写 Cookie")
         if rejected_videos:
@@ -651,6 +672,7 @@ def collect_bilibili(
             "filter_titles": filter_titles and not bool(video_ref),
             "filter_comments": filter_comments,
             "logged_in": _has_sessdata(),
+            "sentiment_job_id": (sentiment_job or {}).get("id"),
             "notes": notes,
             "source": "bilibili_collect",
         }

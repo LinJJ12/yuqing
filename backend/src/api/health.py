@@ -34,7 +34,7 @@ def health_ready():
             "sentiment_model_id": settings.sentiment_model_id,
             "api_port": settings.port,
             "stack": {
-                "sentiment": "lexicon + chinese-roberta → positive/neutral/negative (GPU)",
+                "sentiment": "chinese BERT ternary → pos/neu/neg/uncertain (GPU); manual/llm protected",
                 "topics": "wordcloud + BERTopic (Ollama local embed)",
                 "forecast": "rolling-mean / Prophet",
                 "spread": "growth-rate + peak (no SIR)",

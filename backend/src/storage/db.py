@@ -82,6 +82,7 @@ class Store:
                     sentiment INTEGER,
                     sentiment_label TEXT,
                     sentiment_method TEXT,
+                    sentiment_confidence REAL,
                     raw_json TEXT NOT NULL DEFAULT '{}',
                     UNIQUE(platform, source_id)
                 );
@@ -110,6 +111,14 @@ class Store:
                 );
                 """
             )
+            self._ensure_schema(conn)
+
+    @staticmethod
+    def _ensure_schema(conn: sqlite3.Connection) -> None:
+        """增量列迁移（已有库不会重建表）。"""
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(posts)").fetchall()}
+        if "sentiment_confidence" not in cols:
+            conn.execute("ALTER TABLE posts ADD COLUMN sentiment_confidence REAL")
 
     def create_import_job(self, filename: str, topic: str, platform: str) -> dict:
         job_id = uuid.uuid4().hex
@@ -172,8 +181,9 @@ class Store:
                     """INSERT OR IGNORE INTO posts(
                         platform, source_id, author, text, published_at,
                         engagement_json, fetched_at, import_job_id, source_url,
-                        topic, sentiment, sentiment_label, sentiment_method, raw_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        topic, sentiment, sentiment_label, sentiment_method,
+                        sentiment_confidence, raw_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         post["platform"],
                         post["source_id"],
@@ -188,6 +198,7 @@ class Store:
                         post.get("sentiment"),
                         post.get("sentiment_label"),
                         post.get("sentiment_method"),
+                        post.get("sentiment_confidence"),
                         _dump(post.get("raw", {})),
                     ),
                 )
@@ -199,6 +210,7 @@ class Store:
         *,
         topic: str | None = None,
         platform: str | None = None,
+        label: str | None = None,
     ) -> int:
         clauses: list[str] = []
         values: list[Any] = []
@@ -208,6 +220,9 @@ class Store:
         if platform and platform != "all":
             clauses.append("platform = ?")
             values.append(platform)
+        if label:
+            clauses.append("sentiment_label = ?")
+            values.append(label)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self.connect() as conn:
             row = conn.execute(
@@ -225,6 +240,8 @@ class Store:
         offset: int = 0,
         method: str | None = None,
         only_pending_bert: bool = False,
+        exclude_protected: bool = False,
+        label: str | None = None,
         order: str = "fetched",
     ) -> list[dict]:
         clauses: list[str] = []
@@ -239,13 +256,26 @@ class Store:
             clauses.append("sentiment_method = ?")
             values.append(method)
         if only_pending_bert:
+            # 人工/LLM 改判视为已完成，不进待处理；也不被模型覆盖
             clauses.append(
-                "(sentiment_method IS NULL OR sentiment_method != 'bert')"
+                "(sentiment_method IS NULL OR sentiment_method NOT IN ('bert', 'manual', 'llm'))"
             )
+        if exclude_protected:
+            clauses.append(
+                "(sentiment_method IS NULL OR sentiment_method NOT IN ('manual', 'llm'))"
+            )
+        if label:
+            clauses.append("sentiment_label = ?")
+            values.append(label)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         # 默认按入库时间，避免样例假发布时间压过真实采集
         if order == "published":
             order_sql = "COALESCE(published_at, fetched_at) DESC, id DESC"
+        elif order == "confidence_asc":
+            order_sql = (
+                "CASE WHEN sentiment_confidence IS NULL THEN 1 ELSE 0 END, "
+                "sentiment_confidence ASC, id DESC"
+            )
         else:
             order_sql = "COALESCE(fetched_at, published_at) DESC, id DESC"
         values.extend([limit, offset])
@@ -255,6 +285,37 @@ class Store:
                     ORDER BY {order_sql}
                     LIMIT ? OFFSET ?""",
                 values,
+            ).fetchall()
+        return [self._post_row(row) for row in rows]
+
+    def get_post(self, post_id: int) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM posts WHERE id = ?", (post_id,)
+            ).fetchone()
+        return self._post_row(row) if row else None
+
+    def list_review_posts(self, *, limit: int = 40) -> list[dict]:
+        """难例优先：uncertain → 低置信 BERT → 最近帖。"""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM posts
+                ORDER BY
+                  CASE
+                    WHEN sentiment_label = 'uncertain' THEN 0
+                    WHEN sentiment_method = 'bert'
+                         AND sentiment_confidence IS NOT NULL
+                         AND sentiment_confidence < 0.65 THEN 1
+                    ELSE 2
+                  END,
+                  CASE WHEN sentiment_confidence IS NULL THEN 1 ELSE 0 END,
+                  sentiment_confidence ASC,
+                  COALESCE(fetched_at, published_at) DESC,
+                  id DESC
+                LIMIT ?
+                """,
+                (limit,),
             ).fetchall()
         return [self._post_row(row) for row in rows]
 
@@ -276,13 +337,21 @@ class Store:
         sentiment: int,
         sentiment_label: str,
         sentiment_method: str,
+        sentiment_confidence: float | None = None,
     ) -> None:
         with self.connect() as conn:
             conn.execute(
                 """UPDATE posts
-                   SET sentiment = ?, sentiment_label = ?, sentiment_method = ?
+                   SET sentiment = ?, sentiment_label = ?, sentiment_method = ?,
+                       sentiment_confidence = ?
                    WHERE id = ?""",
-                (sentiment, sentiment_label, sentiment_method, post_id),
+                (
+                    sentiment,
+                    sentiment_label,
+                    sentiment_method,
+                    sentiment_confidence,
+                    post_id,
+                ),
             )
 
     def update_post_sentiments(self, updates: list[dict]) -> int:
@@ -291,13 +360,15 @@ class Store:
         with self.connect() as conn:
             conn.executemany(
                 """UPDATE posts
-                   SET sentiment = ?, sentiment_label = ?, sentiment_method = ?
+                   SET sentiment = ?, sentiment_label = ?, sentiment_method = ?,
+                       sentiment_confidence = ?
                    WHERE id = ?""",
                 [
                     (
                         u["sentiment"],
                         u["sentiment_label"],
                         u["sentiment_method"],
+                        u.get("sentiment_confidence"),
                         u["id"],
                     )
                     for u in updates
@@ -306,6 +377,8 @@ class Store:
         return len(updates)
 
     def sentiment_stats(self) -> dict:
+        from src.services.sentiment import sentiment_model_status
+
         with self.connect() as conn:
             by_label = conn.execute(
                 """SELECT COALESCE(sentiment_label, 'unknown') AS label,
@@ -318,10 +391,30 @@ class Store:
             bert_done = conn.execute(
                 "SELECT COUNT(*) AS c FROM posts WHERE sentiment_method = 'bert'"
             ).fetchone()["c"]
+            uncertain = conn.execute(
+                "SELECT COUNT(*) AS c FROM posts WHERE sentiment_label = 'uncertain'"
+            ).fetchone()["c"]
+            protected = conn.execute(
+                "SELECT COUNT(*) AS c FROM posts WHERE sentiment_method IN ('manual', 'llm')"
+            ).fetchone()["c"]
+        model = sentiment_model_status(self)
+        stale = bool(model.get("model_stale"))
+        total_i = int(total)
+        bert_i = int(bert_done)
+        protected_i = int(protected)
+        # 人工/LLM 改判不进待处理，也不会被 BERT 覆盖
+        updatable = max(total_i - protected_i, 0)
+        pending = updatable if stale else max(updatable - bert_i, 0)
         return {
-            "total": int(total),
-            "bert_done": int(bert_done),
-            "pending": max(int(total) - int(bert_done), 0),
+            "total": total_i,
+            "bert_done": 0 if stale else bert_i,
+            "bert_labeled": bert_i,
+            "pending": pending,
+            "protected": protected_i,
+            "uncertain": int(uncertain),
+            "model_stale": stale,
+            "model_id": model.get("model_id"),
+            "model_id_applied": model.get("model_id_applied"),
             "breakdown": [
                 {
                     "label": r["label"],

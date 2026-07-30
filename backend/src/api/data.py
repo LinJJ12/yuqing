@@ -27,6 +27,12 @@ class DeletePostsBody(BaseModel):
     dry_run: bool = False
 
 
+class SentimentOverrideIn(BaseModel):
+    label: str = Field(description="positive | neutral | negative | uncertain")
+    method: str = Field(default="manual", description="manual | llm")
+    confidence: float | None = Field(default=1.0, ge=0.0, le=1.0)
+
+
 @router.post("/imports")
 async def create_import(
     file: UploadFile = File(...),
@@ -96,6 +102,7 @@ def list_posts(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     order: str = Query(default="fetched", pattern="^(fetched|published)$"),
+    label: str | None = Query(default=None),
 ):
     store = get_store()
     posts = store.list_posts(
@@ -104,8 +111,9 @@ def list_posts(
         limit=limit,
         offset=offset,
         order=order,
+        label=label,
     )
-    total = store.count_posts(topic=topic, platform=platform)
+    total = store.count_posts(topic=topic, platform=platform, label=label)
     return ok(
         {
             "items": posts,
@@ -113,8 +121,34 @@ def list_posts(
             "total": total,
             "platform": platform or "all",
             "order": order,
+            "label": label,
         }
     )
+
+
+@router.get("/posts/review")
+def list_review_posts(limit: int = Query(default=40, ge=1, le=200)):
+    """难例列表：uncertain / 低置信优先，供人工改判。"""
+    items = get_store().list_review_posts(limit=limit)
+    return ok({"items": items, "count": len(items)})
+
+
+@router.patch("/posts/{post_id}/sentiment")
+def override_post_sentiment(post_id: int, body: SentimentOverrideIn):
+    from src.services.sentiment_review import apply_sentiment_override
+
+    try:
+        post = apply_sentiment_override(
+            post_id,
+            body.label,
+            method=body.method or "manual",
+            confidence=body.confidence,
+        )
+    except LookupError:
+        return err("not_found", "帖子不存在", status=404)
+    except ValueError as exc:
+        return err("invalid_label", str(exc), status=400)
+    return ok(post)
 
 
 @router.post("/posts/delete")

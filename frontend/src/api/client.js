@@ -18,16 +18,18 @@ function createClient(timeout) {
 export const api = createClient(30000)
 export const slowApi = createClient(600000)
 
-function shouldFallback(status, hasBody) {
+function shouldFallback(status, data) {
   if (!status) return true
+  // 后端已返回统一错误体（如模型加载失败 503），勿再直连重试拖长时间
+  if (data && typeof data === 'object' && data.ok === false) return false
   // 代理到错误旧进程时常 404；网关类错误也回退
-  return status === 404 || status === 502 || status === 503 || status === 504 || !hasBody
+  return status === 404 || status === 502 || status === 503 || status === 504 || data == null
 }
 
 async function withFallback(client, method, url, config = {}) {
   try {
     const res = await client.request({ method, url, ...config })
-    if (shouldFallback(res.status, !!res.data) && res.status !== 200) {
+    if (shouldFallback(res.status, res.data) && res.status !== 200) {
       const fallback = axios.create({
         baseURL: DIRECT,
         timeout: client.defaults.timeout,
@@ -63,9 +65,31 @@ export async function fetchPosts({
   limit = 50,
   offset = 0,
   order = 'fetched',
+  label,
 } = {}) {
   const { data } = await withFallback(api, 'get', '/posts', {
-    params: { topic, platform, limit, offset, order },
+    params: { topic, platform, limit, offset, order, label },
+  })
+  return data
+}
+
+export async function fetchReviewPosts(limit = 40) {
+  const { data } = await withFallback(api, 'get', '/posts/review', {
+    params: { limit },
+  })
+  return data
+}
+
+export async function overridePostSentiment(postId, { label, method = 'manual', confidence = 1 } = {}) {
+  const { data } = await withFallback(api, 'patch', `/posts/${postId}/sentiment`, {
+    data: { label, method, confidence },
+  })
+  return data
+}
+
+export async function llmReviewSentiment({ post_id, text, apply = true } = {}) {
+  const { data } = await withFallback(slowApi, 'post', '/analysis/sentiment/llm-review', {
+    data: { post_id, text, apply },
   })
   return data
 }
@@ -99,7 +123,7 @@ export async function previewSentiment(text) {
   return data
 }
 
-export async function runSentiment({ limit = 500, only_pending = true } = {}) {
+export async function runSentiment({ limit = 2000, only_pending = true } = {}) {
   const { data } = await withFallback(slowApi, 'post', '/analysis/sentiment/run', {
     data: { limit, only_pending },
   })
@@ -149,7 +173,13 @@ export async function fetchVideoSummaries(limit = 50) {
   return data
 }
 
-export async function fetchVideoReport(bvid) {
+export async function fetchVideoReport(bvid, { with_ai = false } = {}) {
+  if (with_ai) {
+    const { data } = await withFallback(slowApi, 'post', '/reports/video', {
+      data: { bvid, with_ai: true },
+    })
+    return data
+  }
   const { data } = await withFallback(api, 'get', '/reports/video', {
     params: { bvid },
   })

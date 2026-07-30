@@ -9,19 +9,26 @@ from src.config.settings import settings
 from src.storage.db import get_store
 
 _DEFAULT_NEG_HINTS = (
-    "投诉",
+    "劝退",
     "差评",
-    "故障",
-    "不满",
-    "恶心",
+    "翻车",
+    "塌房",
+    "抄袭",
+    "注水",
+    "水文",
+    "浪费时间",
+    "看不下去",
+    "尴尬",
     "离谱",
     "失望",
-    "崩溃",
-    "排队久",
-    "脏乱",
-    "难吃",
-    "拖延",
-    "态度差",
+    "恶心",
+    "投诉",
+    "骗人",
+    "虚假",
+    "引战",
+    "崩坏",
+    "太烂",
+    "烂尾",
 )
 
 
@@ -29,7 +36,29 @@ def get_alert_keywords() -> list[str]:
     store = get_store()
     saved = store.get_setting("alert_keywords")
     if isinstance(saved, list) and saved:
-        return [str(x).strip() for x in saved if str(x).strip()]
+        cleaned = [str(x).strip() for x in saved if str(x).strip()]
+        # 旧版校园默认词表 → 自动切到口碑默认（用户自定义词不受影响）
+        legacy = {
+            "投诉",
+            "差评",
+            "故障",
+            "不满",
+            "恶心",
+            "离谱",
+            "失望",
+            "崩溃",
+            "排队久",
+            "脏乱",
+            "难吃",
+            "拖延",
+            "态度差",
+        }
+        if cleaned and set(cleaned) <= legacy and len(cleaned) <= len(legacy):
+            # 持久化迁移，避免设置页仍显示旧校园词、预警却用新默认词
+            fresh = list(settings.default_alert_keywords or _DEFAULT_NEG_HINTS)
+            store.set_setting("alert_keywords", fresh)
+            return fresh
+        return cleaned
     return list(settings.default_alert_keywords or _DEFAULT_NEG_HINTS)
 
 
@@ -46,6 +75,48 @@ def set_alert_keywords(keywords: list[str]) -> list[str]:
         cleaned = list(settings.default_alert_keywords or _DEFAULT_NEG_HINTS)
     get_store().set_setting("alert_keywords", cleaned)
     return cleaned
+
+
+def alert_from_post(
+    post: dict[str, Any],
+    keywords: list[str] | None = None,
+    *,
+    title_prefix: str = "负面/敏感舆情",
+) -> dict[str, Any] | None:
+    """按标注方法分级：词典占位不单独报警；BERT 负面才进主预警。"""
+    keywords = keywords if keywords is not None else get_alert_keywords()
+    label = post.get("sentiment_label") or ""
+    method = post.get("sentiment_method") or ""
+    text = post.get("text") or ""
+    hit = [w for w in keywords if w in text]
+    is_trusted = method in {"bert", "manual", "llm"}
+    is_neg = label == "negative"
+
+    if is_trusted and is_neg and hit:
+        severity = "high"
+    elif is_trusted and is_neg:
+        severity = "medium"
+    else:
+        # 非负面敏感词、词典占位均不报警，避免刷屏
+        return None
+
+    topic = post.get("topic") or "未分类"
+    author = post.get("author") or ""
+    title_tail = author or topic
+    return {
+        "id": f"post-{post['id']}",
+        "type": "negative_content",
+        "severity": severity,
+        "title": f"{title_prefix} · {title_tail}",
+        "message": text[:120],
+        "topic": post.get("topic"),
+        "sentiment_label": label,
+        "sentiment_method": method,
+        "sentiment_confidence": post.get("sentiment_confidence"),
+        "keywords": hit,
+        "created_at": post.get("fetched_at") or post.get("published_at"),
+        "post_id": post["id"],
+    }
 
 
 def _prophet_forecast(
@@ -140,36 +211,14 @@ def daily_volume_series(
 
 
 def detect_alerts() -> list[dict[str, Any]]:
-    posts = get_store().list_posts(limit=500)
+    posts = get_store().list_posts(limit=2000)
     alerts: list[dict[str, Any]] = []
     keywords = get_alert_keywords()
 
     for post in posts:
-        label = post.get("sentiment_label")
-        text = post.get("text") or ""
-        hit = [w for w in keywords if w in text]
-        if label != "negative" and not hit:
-            continue
-        if label == "negative" and hit:
-            severity = "high"
-        elif label == "negative":
-            severity = "medium"
-        else:
-            severity = "low"
-        alerts.append(
-            {
-                "id": f"post-{post['id']}",
-                "type": "negative_content",
-                "severity": severity,
-                "title": f"负面/敏感舆情 · {post.get('topic') or '未分类'}",
-                "message": text[:120],
-                "topic": post.get("topic"),
-                "sentiment_label": label,
-                "keywords": hit,
-                "created_at": post.get("fetched_at") or post.get("published_at"),
-                "post_id": post["id"],
-            }
-        )
+        item = alert_from_post(post, keywords)
+        if item:
+            alerts.append(item)
 
     trend = daily_volume_series(14, use_prophet=False)
     series = [row for row in trend["series"] if not row.get("is_forecast")]
@@ -224,9 +273,9 @@ def build_report_summary(*, with_prophet: bool = True) -> dict[str, Any]:
             "items": alerts[:10],
         },
         "notes": [
-            "情感主路径为 BERT（正/中/负）；导入时词典标签仅作占位。",
+            "情感主路径为 BERT（正/中/负；低置信为 uncertain）；入库不再写词典情感。",
             "主题向量默认使用本机 Ollama 嵌入模型。",
-            "预警规则：负面情感/敏感词（可在设置页配置）+ 日环比热度突增。",
+            "预警仅采信 BERT 负面（可叠加敏感词升为 high）；换模型后需重跑情感。",
             "趋势：滑动平均；样本充足时附加 Prophet 预测。",
         ],
     }

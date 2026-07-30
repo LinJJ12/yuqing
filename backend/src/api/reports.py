@@ -18,6 +18,11 @@ class ReportSummaryIn(BaseModel):
     with_ai: bool = False
 
 
+class VideoReportIn(BaseModel):
+    bvid: str
+    with_ai: bool = False
+
+
 @router.get("/reports/summary")
 def report_summary():
     return ok(build_report_summary())
@@ -41,9 +46,21 @@ def report_videos(limit: int = Query(default=50, ge=1, le=200)):
 
 
 @router.get("/reports/video")
-def report_video(bvid: str = Query(..., min_length=2, max_length=200)):
+def report_video(
+    bvid: str = Query(..., min_length=2, max_length=200),
+    with_ai: bool = Query(default=False),
+):
     try:
-        data = build_video_report(bvid)
+        data = build_video_report(bvid, with_ai=with_ai)
+    except ValueError as exc:
+        return err("invalid_bvid", str(exc), status=400)
+    return ok(data)
+
+
+@router.post("/reports/video")
+def report_video_post(body: VideoReportIn):
+    try:
+        data = build_video_report(body.bvid, with_ai=body.with_ai)
     except ValueError as exc:
         return err("invalid_bvid", str(exc), status=400)
     return ok(data)

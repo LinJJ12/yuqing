@@ -8,7 +8,11 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from src.services.sentiment import get_sentiment_analyzer
+from src.services.sentiment import (
+    get_sentiment_analyzer,
+    mark_sentiment_model_applied,
+    should_rerun_all_sentiment,
+)
 from src.services.topics import get_topic_analyzer
 from src.storage.db import get_store
 
@@ -18,16 +22,31 @@ _lock = threading.Lock()
 
 def _run_sentiment(limit: int, only_pending: bool) -> dict[str, Any]:
     store = get_store()
+    force_all = should_rerun_all_sentiment(only_pending, store)
     posts = store.list_posts(
         limit=limit,
         offset=0,
-        only_pending_bert=only_pending,
+        only_pending_bert=not force_all,
+        exclude_protected=True,
     )
     if not posts:
+        if force_all:
+            mark_sentiment_model_applied(store)
+        stats = store.sentiment_stats()
+        if stats.get("total", 0) == 0:
+            msg = "库中无帖子"
+        elif force_all:
+            msg = "没有可覆盖的帖子（人工/LLM 改判已保护）"
+        elif only_pending:
+            msg = "没有待分析帖子"
+        else:
+            msg = "没有可分析帖子"
         return {
             "updated": 0,
-            "message": "没有待分析帖子" if only_pending else "库中无帖子",
-            "stats": store.sentiment_stats(),
+            "message": msg,
+            "stats": stats,
+            "full_rerun": force_all,
+            "model_stale": False if force_all else bool(stats.get("model_stale")),
         }
     analyzer = get_sentiment_analyzer()
     t0 = time.perf_counter()
@@ -38,16 +57,27 @@ def _run_sentiment(limit: int, only_pending: bool) -> dict[str, Any]:
             "sentiment": pred["sentiment"],
             "sentiment_label": pred["sentiment_label"],
             "sentiment_method": "bert",
+            "sentiment_confidence": pred.get("sentiment_confidence", pred.get("confidence")),
         }
         for post, pred in zip(posts, preds)
     ]
     updated = store.update_post_sentiments(updates)
+    mark_sentiment_model_applied(store)
     return {
         "updated": updated,
         "device": analyzer.status.get("device"),
         "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1),
         "stats": store.sentiment_stats(),
+        "full_rerun": force_all,
     }
+
+
+def enqueue_pending_sentiment(*, limit: int = 2000) -> dict:
+    """采集/导入后排队跑待处理 BERT（不阻塞主流程）。"""
+    return enqueue_analysis_job(
+        "sentiment",
+        {"limit": limit, "only_pending": True},
+    )
 
 
 def _run_topics(limit: int, use_bertopic: bool) -> dict[str, Any]:
@@ -81,7 +111,7 @@ def _execute_job(job_id: str) -> None:
         store.update_analysis_job(job_id, status="running")
         if kind == "sentiment":
             result = _run_sentiment(
-                int(params.get("limit", 500)),
+                int(params.get("limit", 2000)),
                 bool(params.get("only_pending", True)),
             )
         elif kind == "topics":
@@ -91,7 +121,7 @@ def _execute_job(job_id: str) -> None:
             )
         elif kind == "pipeline":
             sent = _run_sentiment(
-                int(params.get("limit", 500)),
+                int(params.get("limit", 2000)),
                 bool(params.get("only_pending", True)),
             )
             topics = _run_topics(

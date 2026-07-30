@@ -192,6 +192,22 @@ def _chat_completion(
         ) from exc
 
 
+def chat_completion(
+    *,
+    system: str,
+    user: str,
+    history: list[dict[str, str]] | None = None,
+    max_tokens: int = 1200,
+) -> dict[str, Any]:
+    """对外 LLM 聊天入口（报告口碑 / Agent 共用）。"""
+    return _chat_completion(
+        system=system,
+        user=user,
+        history=history,
+        max_tokens=max_tokens,
+    )
+
+
 def agent_chat(
     question: str,
     *,

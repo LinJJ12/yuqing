@@ -129,7 +129,16 @@ def _extract_text(record: dict) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def infer_topic(text: str, fallback: str = "综合") -> str:
+def infer_topic(
+    text: str,
+    fallback: str = "综合",
+    *,
+    platform: str | None = None,
+) -> str:
+    """无显式 topic 时的弱推断。B 站等口碑场景不套校园词表。"""
+    plat = (platform or "").strip().lower()
+    if plat in {"bili", "bilibili", "dy", "douyin", "xhs", "xiaohongshu", "wb", "weibo"}:
+        return fallback
     for kw in settings.default_school_keywords:
         if kw in text:
             return kw
@@ -137,7 +146,7 @@ def infer_topic(text: str, fallback: str = "综合") -> str:
 
 
 def lexicon_sentiment(text: str) -> tuple[int, str, str]:
-    """返回 (score -1/0/1, label, method)。"""
+    """返回 (score -1/0/1, label, method)。仅作调试/对照，入库默认不再使用。"""
     pos = sum(1 for w in _POS if w in text)
     neg = sum(1 for w in _NEG if w in text)
     if pos > neg:
@@ -196,9 +205,12 @@ def normalize_post(
         _first(record, "topic", "keyword", "source_keyword", default="") or ""
     ).strip()
     if not resolved_topic:
-        resolved_topic = infer_topic(text)
+        resolved_topic = infer_topic(text, platform=platform)
 
-    score, label, method = lexicon_sentiment(text)
+    # 入库不写词典情感，避免未跑 BERT 时污染预警/报告；仅保留显式提供的标签
+    score: int | None = None
+    label: str | None = None
+    method: str | None = None
     raw_sent = record.get("sentiment")
     if isinstance(raw_sent, str) and raw_sent.lower() in {
         "positive",

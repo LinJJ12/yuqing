@@ -14,11 +14,11 @@
 |------|--------|
 | `app.py` | 创建 `FastAPI` 应用、挂载各 router |
 | `health.py` | `/health/*` |
-| `data.py` | `/imports` `/posts` `/posts/delete` `/dashboard/overview` |
+| `data.py` | `/imports` `/posts` `/posts/review` `/posts/{id}/sentiment` `/posts/delete` `/dashboard/overview` |
 | `collect.py` | `/collect/bilibili`（含标题门禁 / 评论去噪参数） |
 | `analysis.py` | `/analysis/*` `/analysis-jobs` |
 | `alerts.py` | `/alerts` `/trends` `/settings/alert-keywords` |
-| `reports.py` | `/reports/summary` `/reports/videos` `/reports/video` `/reports/export.*` |
+| `reports.py` | `/reports/summary` `/reports/videos` `/reports/video`（GET/POST，`with_ai`） `/reports/export.*` |
 | `agent.py` | `/agent/status` `/agent/chat` `/agent/brief`（可选 `bvid`） |
 
 ## 下一层怎么选
@@ -27,7 +27,7 @@
 |----------|--------|
 | 导入 / 列表 / 删除 / 总览 | `storage/`（导入经 `services/ingest`） |
 | B 站评论采集 | `services/bilibili_collect` + `bilibili_quality` |
-| 情感 / 主题推理 | `services/sentiment` · `services/topics` |
+| 情感 / 主题推理 | `services/sentiment` · `sentiment_review` · `services/topics` |
 | 预警 / 趋势 / 全局报告摘要 | `services/forecast` |
 | 单视频口碑 | `services/video_report` |
 | 报告导出 / AI 摘要 | `services/report` |

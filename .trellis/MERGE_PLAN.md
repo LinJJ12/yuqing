@@ -3,7 +3,7 @@
 > 工作流：Triage → Plan → Gate → Execute → Verify  
 > 环境：`yuqing/.venv`（uv + Python 3.11 + torch cu128）  
 > GPU：NVIDIA GeForce RTX 5070（需 sm_120 / CUDA 12.8+）  
-> **模型栈（已更新）**：词典快筛 + 中文 BERT（GPU）+ BERTopic + 滑动平均/Prophet；不做 TextCNN / LDA / ARIMA / SIR
+> **模型栈（已更新）**：中文三分类 BERT（GPU，低置信 uncertain）+ 人工/LLM 难例改判 + BERTopic + 滑动平均/Prophet；入库不写词典情感；不做 TextCNN / LDA / ARIMA / SIR
 
 ---
 
@@ -15,7 +15,7 @@
 | `campus_sentiment_analysis` | 校园场景、预警审核、FastAPI、采集思路 | 前端是 React（改 Vue）；MySQL/Agent 一期简化 |
 
 **目标产品定位（大创）**  
-校园舆情监测：导入数据 → GPU 情感 → 主题/趋势 → 预警与报告 → Vue 工作台。
+多平台观众反馈 / B 站评论口碑监测（校园样例可选）：导入或采集 → GPU 情感 → 主题/趋势 → 预警与报告 → Vue 工作台。
 
 ---
 
@@ -27,11 +27,11 @@
 前端:  Vue 3 + Vite + Vue Router + Pinia + ECharts
 后端:  FastAPI + 可选 RQ Worker
 存储:  一期 SQLite
-情感:  词典快筛（CPU）+ 中文 RoBERTa/BERT（GPU）
-主题:  TF-IDF 词云 + BERTopic（嵌入可走 GPU）
+情感:  中文三分类 BERT（默认 weibo-sentiment；GPU；低置信 uncertain）
+主题:  TF-IDF 词云 + BERTopic（嵌入可走 GPU / Ollama）
 趋势:  日聚合 + 滑动平均；可选 Prophet
 传播:  不做 SIR → 增长率 / 峰值检测
-报告:  PDF/CSV；可选 OpenAI 兼容摘要
+报告:  PDF/CSV；可选 OpenAI 兼容摘要；单视频口碑
 采集:  文件导入；内嵌 B 站评论；外挂 MediaCrawler
 ```
 
@@ -51,7 +51,7 @@ yuqing/
     │   ├── core/          # config, device(CUDA)
     │   ├── services/
     │   │   ├── ingest.py
-    │   │   ├── sentiment.py   # 词典 + BERT
+    │   │   ├── sentiment.py   # 三分类 BERT + uncertain
     │   │   ├── topics.py      # 词云 + BERTopic
     │   │   ├── forecast.py    # 滑动平均 / Prophet
     │   │   ├── alert.py       # 增长率 + 校园规则
@@ -66,19 +66,19 @@ yuqing/
 |------|--------|----------|
 | 登录 / 任务状态 | social | FastAPI 会话或 JWT |
 | 导入去重 | social | 移植 |
-| 情感 | 新实现 | 词典 + `uer/roberta-base-finetuned-dianping-chinese`（GPU） |
+| 情感 | 新实现 | `senlou/weibo-sentiment-chinese-bert` 真三分类（GPU）；换模自动失效旧标签 |
 | 主题 | 新实现 | jieba 词频 + BERTopic（替代 LDA） |
 | 趋势 | 新实现 | 滑动平均 / Prophet（替代 ARIMA） |
 | 传播 | 新实现 | 增长率与峰值（替代 SIR） |
-| 预警规则 | campus | 校园关键词配置 |
-| Agent / 爬虫 | campus | **二期** |
+| 预警规则 | 新实现 | B 站口碑敏感词 + BERT 负面（设置页可改） |
+| Agent / 爬虫 | campus | 已落地轻量 Agent + 内嵌 B 站采集 |
 | 前端 | 新建 Vue | 信息架构参考 campus 页面 |
 
 ### 1.4 GPU 策略（RTX 5070）
 
 1. `torch` cu128，启动探测 CUDA，失败则 CPU + 日志。  
 2. **上 GPU**：BERT 情感批量推理；BERTopic 用的嵌入模型。  
-3. **留 CPU**：词典快筛、jieba、滑动平均、Prophet、预警规则。  
+3. **留 CPU**：jieba、滑动平均、Prophet、预警规则。  
 4. 12GB 显存：BERT batch 16～64；嵌入 batch 32～64。
 
 ### 1.5 API 契约

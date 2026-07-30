@@ -7,7 +7,15 @@
 
 ## 1. 情感模型（必做）
 
-默认模型：`uer/roberta-base-finetuned-dianping-chinese`（经 `HF_ENDPOINT` 镜像拉取）。
+默认模型：`senlou/weibo-sentiment-chinese-bert`（微博域真三分类：正/中/负；经 `HF_ENDPOINT` 镜像拉取）。  
+低置信（默认 `<0.55`）会标为 `uncertain`，并写入 `sentiment_confidence`。  
+若需换回点评二分类：`SENTIMENT_MODEL_ID=uer/roberta-base-finetuned-dianping-chinese`（中性由阈值推断）。  
+换模型后请全量重跑：`uv run python backend/scripts/rerun_sentiment.py`  
+（系统也会把旧标签标为 `model_stale`，「分析待处理」会自动覆盖；`manual` / `llm` 改判不会被覆盖。）
+
+采集/导入成功后会自动排队「待处理」情感任务。难例可在情感页人工改判或 LLM 复判（`GET /posts/review`、`PATCH /posts/{id}/sentiment`、`POST /analysis/sentiment/llm-review`）。
+
+小黄金集评测：`uv run python backend/scripts/eval_sentiment.py`
 
 ```powershell
 cd C:\Users\Administrator\Desktop\yuqing

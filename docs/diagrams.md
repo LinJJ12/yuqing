@@ -35,7 +35,7 @@ flowchart TD
     B --> C[api/data 校验后缀与大小]
     C --> D[落盘 backend/data/imports/]
     D --> E[services/ingest 解析<br/>JSON / JSONL / CSV]
-    E --> F[normalize_post<br/>统一字段 + 词典情感占位]
+    E --> F[normalize_post<br/>统一字段；不写词典情感]
     F --> G[storage 插入 posts<br/>UNIQUE platform+source_id]
     G --> H[回写 import_jobs 统计]
     H --> I[前端刷新帖子列表 / 总览]
@@ -55,24 +55,34 @@ flowchart TD
     F --> H[reply/main 拉评论<br/>含二级回复]
     H --> I[normalize_post platform=bili]
     I --> J[storage 入库 + import_jobs]
-    J --> K[前端刷新任务与帖子列表]
+    J --> J2[enqueue_pending_sentiment<br/>仅待处理 BERT]
+    J2 --> K[前端刷新任务与帖子列表]
+    J --> K
 ```
 
 ### 1.3 情感分析（同步 vs 异步）
 
 ```mermaid
 flowchart TD
-    A[用户点击分析] --> B{同步还是后台?}
+    A[用户点击分析 / 采集入库自动入队] --> B{同步还是后台?}
     B -->|同步| C[POST /analysis/sentiment/run]
     B -->|后台| D[POST /analysis-jobs<br/>kind=sentiment]
     D --> E[analysis_jobs 入队<br/>进程内线程池执行]
-    C --> F[services/sentiment<br/>中文 RoBERTa GPU]
+    C --> F[services/sentiment<br/>中文三分类 BERT GPU]
     E --> F
-    F --> G[写回 posts<br/>sentiment_label / method=bert]
-    G --> H[前端刷新统计与柱状图]
+    F --> G[写回 posts<br/>label/method=bert/confidence]
+    G --> G2{低置信?}
+    G2 -->|是| G3[label=uncertain]
+    G2 -->|否| H[前端刷新统计与柱状图]
+    G3 --> H
     E --> I[前端轮询 GET /analysis-jobs/id]
     I -->|succeeded / failed| H
+    H --> J[难例: GET /posts/review]
+    J --> K[人工 PATCH /posts/id/sentiment<br/>或 LLM POST .../llm-review]
+    K --> L[method=manual/llm<br/>后续 BERT 不覆盖]
 ```
+
+换模型后 `model_stale=true`，「分析待处理」会自动全量覆盖（仍跳过 manual/llm）。
 
 ### 1.4 报告导出（含可选 AI 摘要）
 
@@ -226,7 +236,7 @@ flowchart TB
     end
 
     subgraph Ext["外部 / 本地推理"]
-        BERT[中文 RoBERTa<br/>GPU / CPU]
+        BERT[中文三分类 BERT<br/>GPU / CPU]
         OLL[Ollama 嵌入<br/>BERTopic]
         DS[OpenAI 兼容 LLM<br/>可选报告摘要 / Agent]
         BILI[B 站公开接口<br/>可选 SESSDATA]

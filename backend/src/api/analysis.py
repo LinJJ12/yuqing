@@ -14,7 +14,11 @@ from src.services.jobs import (
     get_analysis_job,
     list_analysis_jobs,
 )
-from src.services.sentiment import get_sentiment_analyzer
+from src.services.sentiment import (
+    get_sentiment_analyzer,
+    mark_sentiment_model_applied,
+    should_rerun_all_sentiment,
+)
 from src.services.topics import get_topic_analyzer
 from src.storage.db import get_store
 
@@ -26,8 +30,14 @@ class TextIn(BaseModel):
 
 
 class AnalyzeSentimentIn(BaseModel):
-    limit: int = Field(default=500, ge=1, le=5000)
+    limit: int = Field(default=2000, ge=1, le=5000)
     only_pending: bool = True
+
+
+class LlmReviewIn(BaseModel):
+    post_id: int | None = None
+    text: str | None = Field(default=None, max_length=2000)
+    apply: bool = True
 
 
 class AnalyzeTopicsIn(BaseModel):
@@ -37,7 +47,7 @@ class AnalyzeTopicsIn(BaseModel):
 
 class AnalysisJobIn(BaseModel):
     kind: str = Field(description="sentiment | topics | pipeline")
-    limit: int = Field(default=500, ge=1, le=5000)
+    limit: int = Field(default=2000, ge=1, le=5000)
     only_pending: bool = True
     use_bertopic: bool = True
     topic_limit: int = Field(default=2000, ge=10, le=5000)
@@ -72,20 +82,58 @@ def sentiment_preview(body: TextIn):
         return err("model_load_failed", f"情感模型加载/推理失败: {exc}", status=503)
 
 
+@router.post("/analysis/sentiment/llm-review")
+def sentiment_llm_review(body: LlmReviewIn):
+    """LLM 复判难例；默认写回库（method=llm，后续 BERT 不覆盖）。"""
+    from src.services.agent import AgentUnavailableError
+    from src.services.sentiment_review import llm_review_post, llm_review_text
+
+    try:
+        if body.post_id is not None:
+            data = llm_review_post(body.post_id, apply=body.apply)
+        elif body.text and body.text.strip():
+            data = llm_review_text(body.text.strip())
+        else:
+            return err("invalid_request", "请提供 post_id 或 text", status=400)
+        return ok(data)
+    except LookupError:
+        return err("not_found", "帖子不存在", status=404)
+    except AgentUnavailableError as exc:
+        return err("llm_unavailable", str(exc), status=503)
+    except ValueError as exc:
+        return err("llm_review_failed", str(exc), status=400)
+    except Exception as exc:
+        return err("llm_review_failed", f"LLM 复判失败: {exc}", status=500)
+
+
 @router.post("/analysis/sentiment/run")
 def sentiment_run(body: AnalyzeSentimentIn):
     store = get_store()
+    force_all = should_rerun_all_sentiment(body.only_pending, store)
     posts = store.list_posts(
         limit=body.limit,
         offset=0,
-        only_pending_bert=body.only_pending,
+        only_pending_bert=not force_all,
+        exclude_protected=True,
     )
     if not posts:
+        # 换模全量时若仅剩人工/LLM 保护帖或库空，仍标记模型已对齐，避免永久 stale
+        if force_all:
+            mark_sentiment_model_applied(store)
         stats = store.sentiment_stats()
+        if stats.get("total", 0) == 0:
+            msg = "库中无帖子"
+        elif force_all:
+            msg = "没有可覆盖的帖子（人工/LLM 改判已保护）"
+        elif body.only_pending:
+            msg = "没有待分析帖子"
+        else:
+            msg = "没有可分析帖子"
         return ok(
             {
                 "updated": 0,
-                "message": "没有待分析帖子" if body.only_pending else "库中无帖子",
+                "message": msg,
+                "full_rerun": force_all,
                 "stats": stats,
             }
         )
@@ -99,16 +147,21 @@ def sentiment_run(body: AnalyzeSentimentIn):
                 "sentiment": pred["sentiment"],
                 "sentiment_label": pred["sentiment_label"],
                 "sentiment_method": "bert",
+                "sentiment_confidence": pred.get(
+                    "sentiment_confidence", pred.get("confidence")
+                ),
             }
             for post, pred in zip(posts, preds)
         ]
         updated = store.update_post_sentiments(updates)
+        mark_sentiment_model_applied(store)
         elapsed = round((time.perf_counter() - t0) * 1000, 1)
         return ok(
             {
                 "updated": updated,
                 "device": analyzer.status.get("device"),
                 "elapsed_ms": elapsed,
+                "full_rerun": force_all,
                 "stats": store.sentiment_stats(),
                 "sample": [
                     {

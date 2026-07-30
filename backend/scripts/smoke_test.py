@@ -38,10 +38,17 @@ def main() -> None:
     pos = normalize_post({"id": "1", "text": "食堂很好吃，非常满意推荐"})
     neg = normalize_post({"id": "2", "text": "宿舍热水故障，差评投诉"})
     neu = normalize_post({"id": "3", "text": "图书馆今天开到九点"})
-    check("normalize positive", pos["sentiment_label"] == "positive", str(pos))
-    check("normalize negative", neg["sentiment_label"] == "negative", str(neg))
-    check("lexicon returns triple", lexicon_sentiment("一般情况")[1] in {"positive", "neutral", "negative"})
-    check("infer_topic fallback", normalize_post({"id": "4", "text": "今天天气不错"})["topic"] == "综合")
+    check("normalize skips lexicon", pos["sentiment_label"] is None, str(pos))
+    check("normalize skips lexicon neg", neg["sentiment_method"] is None, str(neg))
+    check("lexicon helper still works", lexicon_sentiment("一般情况")[1] in {"positive", "neutral", "negative"})
+    check("infer_topic campus", normalize_post({"id": "4", "text": "食堂排队久"})["topic"] == "食堂")
+    check("infer_topic fallback", normalize_post({"id": "5", "text": "今天天气不错"})["topic"] == "综合")
+    check(
+        "infer_topic bili no campus",
+        normalize_post({"id": "6", "text": "食堂真好吃", "platform": "bili"})["topic"] == "综合",
+    )
+    provided = normalize_post({"id": "7", "text": "任意", "sentiment": "negative"})
+    check("provided sentiment", provided["sentiment_label"] == "negative" and provided["sentiment_method"] == "provided")
 
     from src.services.bilibili_collect import resolve_collect_topic
 
@@ -59,6 +66,35 @@ def main() -> None:
         "collect topic explicit wins",
         resolve_collect_topic(topic="口碑", keyword="数码评测", video_titles=["某视频"])
         == "口碑",
+    )
+
+    # 情感 pipeline 批输出整形：多条 top-1 不可再包一层
+    from src.services.sentiment import SentimentAnalyzer
+
+    batch_top1 = [
+        {"label": "positive", "score": 0.9},
+        {"label": "negative", "score": 0.8},
+    ]
+    shaped = SentimentAnalyzer._normalize_pipeline_batch(batch_top1, 2)
+    check("sentiment batch top1 shape", len(shaped) == 2 and shaped[0]["label"] == "positive")
+    single_all = [
+        {"label": "positive", "score": 0.6},
+        {"label": "negative", "score": 0.4},
+    ]
+    shaped1 = SentimentAnalyzer._normalize_pipeline_batch(single_all, 1)
+    check("sentiment single all-scores shape", len(shaped1) == 1 and len(shaped1[0]) == 2)
+
+    # HF 镜像须在 import transformers 前写入环境（settings 模块加载时）
+    import os as _os
+
+    from src.config.settings import settings as _settings
+
+    check(
+        "hf endpoint env synced",
+        bool(_settings.hf_endpoint)
+        and _os.environ.get("HF_ENDPOINT", "").rstrip("/")
+        == _settings.hf_endpoint.rstrip("/"),
+        f"env={_os.environ.get('HF_ENDPOINT')} settings={_settings.hf_endpoint}",
     )
 
     inserted = store.insert_posts("job1", [pos, neg, neu])
@@ -153,10 +189,75 @@ def main() -> None:
         vrep = build_video_report("BV1SmokeTest999")
         check("video report count", vrep["overview"]["total_posts"] == 3, str(vrep["overview"]))
         check("video report conclusion", bool(vrep.get("conclusion")), vrep.get("conclusion", "")[:80])
+        # include_video_title 写入的标题帖也须带 bvid，才能进口碑聚合
+        title_only = normalize_post(
+            {
+                "id": "bili-av-title-smoke",
+                "text": "带 bvid 的标题帖",
+                "platform": "bili",
+                "topic": "测试视频",
+                "source_url": "https://www.bilibili.com/video/BV1SmokeTest999",
+                "extra": {
+                    "video_title": "口碑冒烟测试视频",
+                    "bvid": "BV1SmokeTest999",
+                    "aid": 1,
+                    "kind": "video_title",
+                },
+            },
+            platform="bili",
+            topic="测试视频",
+        )
+        check(
+            "title post keeps bvid",
+            (title_only.get("raw") or {}).get("extra", {}).get("bvid") == "BV1SmokeTest999",
+            str(title_only.get("raw")),
+        )
         r = client.get("/api/v1/reports/video", params={"bvid": "BV1SmokeTest999"})
         check("video report api", r.status_code == 200 and r.json()["ok"] is True, r.text[:200])
         r = client.get("/api/v1/reports/videos")
         check("video list api", r.status_code == 200 and r.json()["ok"] is True)
+
+        # 难例改判 + 预警仅采信 BERT/人工/LLM 负面
+        from src.services.forecast import alert_from_post
+
+        lex_neg = {
+            "id": 999001,
+            "text": "差评劝退离谱",
+            "sentiment_label": "negative",
+            "sentiment_method": "lexicon",
+            "author": "x",
+            "topic": "t",
+        }
+        check("alert ignores lexicon neg", alert_from_post(lex_neg) is None)
+        bert_neg = {**lex_neg, "id": 999002, "sentiment_method": "bert"}
+        check("alert keeps bert neg", (alert_from_post(bert_neg) or {}).get("severity") == "high")
+        bert_neg_plain = {
+            **lex_neg,
+            "id": 999003,
+            "text": "不太喜欢这期",
+            "sentiment_method": "bert",
+        }
+        check(
+            "alert bert neg no keyword",
+            (alert_from_post(bert_neg_plain) or {}).get("severity") == "medium",
+        )
+
+        r = client.get("/api/v1/posts/review", params={"limit": 10})
+        check("posts review api", r.status_code == 200 and r.json()["ok"] is True, r.text[:160])
+        # 取一条真实帖做人工改判，确认 protected 不进 pending
+        sample_id = store.list_posts(limit=1)[0]["id"]
+        r = client.patch(
+            f"/api/v1/posts/{sample_id}/sentiment",
+            json={"label": "neutral", "method": "manual", "confidence": 1},
+        )
+        check("sentiment override api", r.status_code == 200 and r.json()["ok"] is True, r.text[:160])
+        stats = store.sentiment_stats()
+        check("stats has protected", int(stats.get("protected") or 0) >= 1, str(stats))
+        check(
+            "pending excludes protected",
+            int(stats["pending"]) <= max(int(stats["total"]) - int(stats["protected"]), 0),
+            str(stats),
+        )
 
         # 清理噪声 + 质量门禁
         from src.services.bilibili_quality import title_reject_reason, denoise_comments

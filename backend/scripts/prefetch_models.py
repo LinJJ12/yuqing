@@ -14,7 +14,7 @@ from src.config.settings import settings
 
 def main() -> None:
     if settings.hf_endpoint:
-        os.environ.setdefault("HF_ENDPOINT", settings.hf_endpoint)
+        os.environ["HF_ENDPOINT"] = settings.hf_endpoint.rstrip("/")
     model_id = settings.sentiment_model_id
     print(f"HF_ENDPOINT={os.environ.get('HF_ENDPOINT', '(default)')}")
     print(f"预取情感模型: {model_id}")
