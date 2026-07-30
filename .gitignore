@@ -1,0 +1,47 @@
+# —— 环境 / 密钥 ——
+.venv/
+.uv/
+.env
+backend/.env
+*.pem
+*.key
+
+# —— 依赖与构建 ——
+node_modules/
+frontend/dist/
+dist/
+*.egg-info/
+.eggs/
+build/
+
+# —— 运行时数据 ——
+backend/data/*
+!backend/data/README.md
+runtime/
+*.db
+*.sqlite3
+# —— 参考仓（只读克隆，不作为正式代码提交）——
+vendor/*
+!vendor/README.md
+
+# —— 本地工具（不进仓库）——
+.tools/
+
+# —— 缓存 / 工具 ——
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# —— 迁移遗留路径（防止误提交）——
+app/
+/scripts/
