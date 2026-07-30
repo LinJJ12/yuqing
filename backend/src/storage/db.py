@@ -465,6 +465,108 @@ class Store:
             "recent_posts": [self._post_row(r) for r in recent],
         }
 
+    def list_bilibili_videos(self, *, limit: int = 50) -> list[dict]:
+        """按 raw.extra.bvid 聚合已入库的 B 站视频。"""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                  json_extract(raw_json, '$.extra.bvid') AS bvid,
+                  MAX(json_extract(raw_json, '$.extra.video_title')) AS video_title,
+                  MAX(json_extract(raw_json, '$.extra.aid')) AS aid,
+                  COUNT(*) AS comment_count,
+                  SUM(CASE WHEN sentiment_label = 'positive' THEN 1 ELSE 0 END) AS positive,
+                  SUM(CASE WHEN sentiment_label = 'neutral' THEN 1 ELSE 0 END) AS neutral,
+                  SUM(CASE WHEN sentiment_label = 'negative' THEN 1 ELSE 0 END) AS negative,
+                  MAX(COALESCE(fetched_at, published_at)) AS last_fetched_at
+                FROM posts
+                WHERE platform = 'bili'
+                  AND json_extract(raw_json, '$.extra.bvid') IS NOT NULL
+                  AND trim(json_extract(raw_json, '$.extra.bvid')) != ''
+                GROUP BY json_extract(raw_json, '$.extra.bvid')
+                ORDER BY MAX(COALESCE(fetched_at, published_at)) DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            bvid = row["bvid"]
+            result.append(
+                {
+                    "bvid": bvid,
+                    "video_title": row["video_title"] or "",
+                    "aid": row["aid"],
+                    "comment_count": int(row["comment_count"] or 0),
+                    "positive": int(row["positive"] or 0),
+                    "neutral": int(row["neutral"] or 0),
+                    "negative": int(row["negative"] or 0),
+                    "last_fetched_at": row["last_fetched_at"],
+                    "source_url": f"https://www.bilibili.com/video/{bvid}" if bvid else None,
+                }
+            )
+        return result
+
+    def list_posts_by_bvid(self, bvid: str, *, limit: int = 2000) -> list[dict]:
+        key = (bvid or "").strip()
+        if not key:
+            return []
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM posts
+                WHERE json_extract(raw_json, '$.extra.bvid') = ?
+                ORDER BY COALESCE(fetched_at, published_at) DESC, id DESC
+                LIMIT ?
+                """,
+                (key, limit),
+            ).fetchall()
+        return [self._post_row(row) for row in rows]
+
+    def delete_posts(
+        self,
+        *,
+        bvid: str | None = None,
+        video_title_contains: str | None = None,
+        topic: str | None = None,
+        platform: str | None = None,
+        dry_run: bool = False,
+    ) -> dict:
+        """按条件删除帖子。至少提供一个过滤条件。"""
+        clauses: list[str] = []
+        values: list[Any] = []
+        bvid_key = (bvid or "").strip()
+        title_key = (video_title_contains or "").strip()
+        topic_key = (topic or "").strip()
+        platform_key = (platform or "").strip()
+        if bvid_key:
+            clauses.append("json_extract(raw_json, '$.extra.bvid') = ?")
+            values.append(bvid_key)
+        if title_key:
+            clauses.append(
+                "instr(COALESCE(json_extract(raw_json, '$.extra.video_title'), ''), ?) > 0"
+            )
+            values.append(title_key)
+        if topic_key:
+            clauses.append("topic = ?")
+            values.append(topic_key)
+        if platform_key:
+            clauses.append("platform = ?")
+            values.append(platform_key)
+        if not clauses:
+            raise ValueError("请至少指定 bvid、视频标题关键词、话题或平台之一")
+        where = " AND ".join(clauses)
+        with self.connect() as conn:
+            matched = conn.execute(
+                f"SELECT COUNT(*) AS c FROM posts WHERE {where}",
+                values,
+            ).fetchone()
+            count = int(matched["c"] or 0)
+            if dry_run or count == 0:
+                return {"deleted": 0, "matched": count, "dry_run": dry_run}
+            conn.execute(f"DELETE FROM posts WHERE {where}", values)
+        return {"deleted": count, "matched": count, "dry_run": False}
+
     @staticmethod
     def _post_row(row: sqlite3.Row) -> dict:
         data = dict(row)

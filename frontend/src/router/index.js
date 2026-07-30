@@ -35,13 +35,13 @@ const routes = [
     path: '/reports',
     name: 'reports',
     component: () => import('../pages/ReportsPage.vue'),
-    meta: { title: '分析报告', subtitle: '一键汇总当前库内分析结果' },
+    meta: { title: '分析报告', subtitle: '全局汇总 · 单视频口碑' },
   },
   {
     path: '/agent',
     name: 'agent',
     component: () => import('../pages/AgentPage.vue'),
-    meta: { title: '智能助手', subtitle: '舆情问答 · 简报生成' },
+    meta: { title: '智能助手', subtitle: '全局问答 · 单视频观众反馈' },
   },
   {
     path: '/settings',

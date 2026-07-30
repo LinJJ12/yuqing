@@ -16,6 +16,11 @@ from urllib.parse import urlparse
 import httpx
 
 from src.config.settings import settings
+from src.services.bilibili_quality import (
+    DEFAULT_TITLE_BLACKLIST,
+    denoise_comments,
+    filter_video_candidates,
+)
 from src.services.normalize import normalize_post
 from src.storage.db import get_store
 
@@ -107,6 +112,13 @@ def _parse_video_ref(value: str) -> dict[str, str | int | None]:
     return {"bvid": None, "aid": None}
 
 
+def normalize_bvid(value: str | None) -> str | None:
+    """从 BV / URL 提取 BV 号；解析不到则返回 None。"""
+    ref = _parse_video_ref(value or "")
+    bvid = ref.get("bvid")
+    return str(bvid) if bvid else None
+
+
 def resolve_video(client: httpx.Client, *, bvid: str | None = None, aid: int | None = None) -> dict[str, Any]:
     params: dict[str, Any] = {}
     if bvid:
@@ -129,18 +141,33 @@ def resolve_video(client: httpx.Client, *, bvid: str | None = None, aid: int | N
     }
 
 
-def search_videos(client: httpx.Client, keyword: str, *, max_videos: int = 3) -> list[dict[str, Any]]:
+def _has_sessdata() -> bool:
+    parsed = _parse_cookie_blob(getattr(settings, "bilibili_sessdata", None) or "")
+    return bool(parsed.get("SESSDATA"))
+
+
+def search_videos(
+    client: httpx.Client,
+    keyword: str,
+    *,
+    max_videos: int = 3,
+    filter_titles: bool = True,
+    require_keyword_hit: bool = True,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """搜索视频。返回 (accepted, rejected)。关键词搜索可套用标题质量门禁。"""
     keyword = (keyword or "").strip()
     if not keyword:
         raise BilibiliCollectError("关键词不能为空")
     max_videos = max(1, min(int(max_videos), 10))
+    # 多取候选再过滤，避免黑名单后数量不足
+    fetch_n = max_videos * 4 if filter_titles else max_videos
 
-    videos: list[dict[str, Any]] = []
+    raw_videos: list[dict[str, Any]] = []
     # 1) 官方搜索 all/v2（本机实测可用）
     try:
         resp = client.get(
             "https://api.bilibili.com/x/web-interface/search/all/v2",
-            params={"keyword": keyword, "page": 1, "page_size": max(10, max_videos)},
+            params={"keyword": keyword, "page": 1, "page_size": max(20, fetch_n)},
             headers={"Referer": "https://search.bilibili.com"},
         )
         payload = resp.json()
@@ -154,7 +181,7 @@ def search_videos(client: httpx.Client, keyword: str, *, max_videos: int = 3) ->
                     if not aid and not bvid:
                         continue
                     title = re.sub(r"<[^>]+>", "", str(item.get("title") or ""))
-                    videos.append(
+                    raw_videos.append(
                         {
                             "aid": int(aid) if aid else None,
                             "bvid": bvid,
@@ -163,13 +190,15 @@ def search_videos(client: httpx.Client, keyword: str, *, max_videos: int = 3) ->
                             "url": f"https://www.bilibili.com/video/{bvid}" if bvid else None,
                         }
                     )
-                    if len(videos) >= max_videos:
-                        return videos
+                    if len(raw_videos) >= fetch_n:
+                        break
+                if len(raw_videos) >= fetch_n:
+                    break
     except Exception:
         pass
 
     # 2) HTML 搜索页提取 BV
-    if len(videos) < max_videos:
+    if len(raw_videos) < fetch_n:
         try:
             html = client.get(
                 "https://search.bilibili.com/all",
@@ -177,22 +206,42 @@ def search_videos(client: httpx.Client, keyword: str, *, max_videos: int = 3) ->
                 headers={"Accept": "text/html,application/xhtml+xml"},
             ).text
             for bvid in list(dict.fromkeys(BV_RE.findall(html))):
-                if any(v.get("bvid") == bvid for v in videos):
+                if any(v.get("bvid") == bvid for v in raw_videos):
                     continue
                 try:
-                    videos.append(resolve_video(client, bvid=bvid))
+                    raw_videos.append(resolve_video(client, bvid=bvid))
                     time.sleep(0.35)
                 except BilibiliCollectError:
                     continue
-                if len(videos) >= max_videos:
+                if len(raw_videos) >= fetch_n:
                     break
         except Exception as exc:
-            if not videos:
+            if not raw_videos:
                 raise BilibiliCollectError(f"关键词搜索失败: {exc}") from exc
 
-    if not videos:
+    if not raw_videos:
         raise BilibiliCollectError("未搜到可用视频（可能被风控，可改用 BV 号或配置 BILIBILI_SESSDATA）")
-    return videos[:max_videos]
+
+    if not filter_titles:
+        return raw_videos[:max_videos], []
+
+    accepted, rejected = filter_video_candidates(
+        raw_videos,
+        keyword=keyword,
+        max_videos=max_videos,
+        blacklist=list(DEFAULT_TITLE_BLACKLIST),
+        require_keyword_hit=require_keyword_hit,
+    )
+    if not accepted:
+        reasons = ", ".join(
+            sorted({str(r.get("reject_reason") or "") for r in rejected if r.get("reject_reason")})[:4]
+        )
+        raise BilibiliCollectError(
+            "搜索结果均未通过标题质量门禁"
+            + (f"（{reasons}）" if reasons else "")
+            + "。请换更具体关键词，或改用 BV 直采，或关闭 filter_titles。"
+        )
+    return accepted, rejected
 
 
 def fetch_comments(
@@ -200,13 +249,20 @@ def fetch_comments(
     aid: int,
     *,
     max_comments: int = 40,
-) -> list[dict[str, Any]]:
+    filter_noise: bool = True,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     max_comments = max(1, min(int(max_comments), 200))
     collected: list[dict[str, Any]] = []
     seen: set[int] = set()
+    logged_in = _has_sessdata()
+    # 有 Cookie 时多翻几页，尽量凑够口碑样本量
+    main_rounds = 20 if logged_in else 10
+    classic_pages = 15 if logged_in else 8
+    sleep_s = 0.55 if logged_in else 0.4
 
     def _append(reply: dict[str, Any]) -> None:
-        if len(collected) >= max_comments:
+        if len(collected) >= max_comments * 2:
+            # 先多收一点，去噪后再截断
             return
         rpid = reply.get("rpid")
         if rpid is not None:
@@ -238,17 +294,52 @@ def fetch_comments(
         if not replies:
             return
         for reply in replies:
-            if len(collected) >= max_comments:
+            if len(collected) >= max_comments * 2:
                 return
             _append(reply)
             kids = reply.get("replies")
             if isinstance(kids, list):
                 _walk(kids)
 
+    def _expand_roots(roots: list[dict[str, Any]]) -> None:
+        """有 Cookie 时补拉二级回复，避免只有少量一级评。"""
+        if not logged_in:
+            return
+        for reply in roots:
+            if len(collected) >= max_comments * 2:
+                return
+            rcount = int(reply.get("rcount") or 0)
+            kids = reply.get("replies") or []
+            if rcount <= len(kids):
+                continue
+            root_id = reply.get("rpid")
+            if not root_id:
+                continue
+            try:
+                resp = client.get(
+                    "https://api.bilibili.com/x/v2/reply/reply",
+                    params={
+                        "type": 1,
+                        "oid": aid,
+                        "root": int(root_id),
+                        "ps": 20,
+                        "pn": 1,
+                    },
+                )
+                payload = resp.json()
+                if payload.get("code") != 0:
+                    continue
+                data = payload.get("data") or {}
+                _walk(data.get("replies") or [])
+                time.sleep(sleep_s)
+            except Exception:
+                continue
+
     # 优先 main（带 cursor）；匿名时常只能拿少量一级 + 嵌套回复
     next_cursor = 0
-    for _ in range(8):
-        if len(collected) >= max_comments:
+    root_batch: list[dict[str, Any]] = []
+    for _ in range(main_rounds):
+        if len(collected) >= max_comments * 2:
             break
         resp = client.get(
             "https://api.bilibili.com/x/v2/reply/main",
@@ -257,14 +348,16 @@ def fetch_comments(
                 "oid": aid,
                 "mode": 3,
                 "next": next_cursor,
-                "ps": min(20, max_comments),
+                "ps": min(30, max(20, max_comments)),
             },
         )
         payload = resp.json()
         if payload.get("code") != 0:
             break
         data = payload.get("data") or {}
-        _walk(data.get("replies") or [])
+        replies = data.get("replies") or []
+        root_batch.extend(replies)
+        _walk(replies)
         cursor = data.get("cursor") or {}
         if cursor.get("is_end"):
             break
@@ -272,25 +365,27 @@ def fetch_comments(
         if nxt in (None, next_cursor):
             break
         next_cursor = nxt
-        time.sleep(0.4)
+        time.sleep(sleep_s)
+
+    _expand_roots(root_batch[:12])
 
     # 回退经典分页（部分视频 main 为空时）
-    if not collected:
+    if len(collected) < max(10, max_comments // 3):
         page = 1
-        while len(collected) < max_comments and page <= 10:
+        while len(collected) < max_comments * 2 and page <= classic_pages:
             resp = client.get(
                 "https://api.bilibili.com/x/v2/reply",
                 params={
                     "type": 1,
                     "oid": aid,
                     "pn": page,
-                    "ps": min(20, max_comments),
+                    "ps": min(30, max_comments),
                     "sort": 2,
                 },
             )
             payload = resp.json()
             if payload.get("code") != 0:
-                if page == 1:
+                if page == 1 and not collected:
                     raise BilibiliCollectError(
                         f"拉取评论失败: {payload.get('message') or payload.get('code')}"
                     )
@@ -300,13 +395,26 @@ def fetch_comments(
                 break
             _walk(replies)
             page += 1
-            time.sleep(0.4)
+            time.sleep(sleep_s)
 
     if not collected:
+        hint = "" if logged_in else "；未检测到 SESSDATA，建议在 backend/.env 配置 BILIBILI_SESSDATA"
         raise BilibiliCollectError(
-            "未拉到评论（视频可能关闭评论，或需配置 BILIBILI_SESSDATA）"
+            "未拉到评论（视频可能关闭评论" + hint + "）"
         )
-    return collected[:max_comments]
+
+    meta: dict[str, Any] = {
+        "raw_fetched": len(collected),
+        "logged_in": logged_in,
+        "noise_filtered": {},
+    }
+    if filter_noise:
+        kept, noise_stats = denoise_comments(collected)
+        meta["noise_filtered"] = noise_stats
+        collected = kept
+    if not collected:
+        raise BilibiliCollectError("评论均被去噪过滤，可关闭 filter_comments 重试或换视频")
+    return collected[:max_comments], meta
 
 
 def resolve_collect_topic(
@@ -378,6 +486,9 @@ def collect_bilibili(
     max_videos: int = 3,
     max_comments_per_video: int = 40,
     include_video_title: bool = False,
+    filter_titles: bool = True,
+    filter_comments: bool = True,
+    require_keyword_hit: bool = True,
 ) -> dict[str, Any]:
     """采集并入库。keyword 与 video（BV/URL）至少填一个。"""
     keyword = (keyword or "").strip()
@@ -393,6 +504,7 @@ def collect_bilibili(
     client = _client()
     try:
         targets: list[dict[str, Any]] = []
+        rejected_videos: list[dict[str, Any]] = []
         if video_ref:
             ref = _parse_video_ref(video_ref)
             if not ref["bvid"] and not ref["aid"]:
@@ -405,7 +517,13 @@ def collect_bilibili(
                 )
             )
         else:
-            targets = search_videos(client, keyword, max_videos=max_videos)
+            targets, rejected_videos = search_videos(
+                client,
+                keyword,
+                max_videos=max_videos,
+                filter_titles=filter_titles,
+                require_keyword_hit=require_keyword_hit,
+            )
 
         topic_clean = resolve_collect_topic(
             topic=topic,
@@ -422,18 +540,41 @@ def collect_bilibili(
 
         all_posts: list[dict] = []
         video_summaries: list[dict[str, Any]] = []
+        noise_total: dict[str, int] = {}
+        video_errors: list[str] = []
         for target in targets:
             aid = target.get("aid")
-            if not aid and target.get("bvid"):
-                target = resolve_video(client, bvid=target["bvid"])
-                aid = target["aid"]
-            if not aid:
+            try:
+                if not aid and target.get("bvid"):
+                    target = resolve_video(client, bvid=target["bvid"])
+                    aid = target["aid"]
+                if not aid:
+                    video_errors.append(f"{target.get('bvid') or '?'}: 缺少 aid")
+                    continue
+                comments, cmeta = fetch_comments(
+                    client,
+                    int(aid),
+                    max_comments=max_comments_per_video,
+                    filter_noise=filter_comments,
+                )
+            except Exception as exc:
+                video_errors.append(
+                    f"{target.get('bvid') or target.get('title') or 'unknown'}: {exc}"
+                )
+                video_summaries.append(
+                    {
+                        "aid": aid,
+                        "bvid": target.get("bvid"),
+                        "title": target.get("title"),
+                        "comments_fetched": 0,
+                        "posts_normalized": 0,
+                        "error": str(exc),
+                    }
+                )
+                time.sleep(0.4)
                 continue
-            comments = fetch_comments(
-                client,
-                int(aid),
-                max_comments=max_comments_per_video,
-            )
+            for reason, n in (cmeta.get("noise_filtered") or {}).items():
+                noise_total[reason] = noise_total.get(reason, 0) + int(n)
             posts = _to_posts(comments, video=target, topic=topic_clean)
             if include_video_title and target.get("title"):
                 try:
@@ -461,20 +602,56 @@ def collect_bilibili(
                     "bvid": target.get("bvid"),
                     "title": target.get("title"),
                     "comments_fetched": len(comments),
+                    "comments_raw": cmeta.get("raw_fetched"),
                     "posts_normalized": len(posts),
+                    "logged_in": cmeta.get("logged_in"),
+                    "noise_filtered": cmeta.get("noise_filtered") or {},
                 }
             )
-            time.sleep(0.5)
+            time.sleep(0.55 if _has_sessdata() else 0.45)
+
+        if not all_posts:
+            detail = "；".join(video_errors[:3])
+            raise BilibiliCollectError(
+                "未入库任何评论（可能全部被过滤或拉取失败）"
+                + (f"：{detail}" if detail else "")
+            )
 
         inserted = store.insert_posts(job["id"], all_posts)
+        notes: list[str] = []
+        if not _has_sessdata():
+            notes.append("未配置 BILIBILI_SESSDATA，评论量可能偏少，建议在 backend/.env 填写 Cookie")
+        if rejected_videos:
+            notes.append(f"标题门禁跳过 {len(rejected_videos)} 个视频")
+        if noise_total:
+            notes.append(
+                "评论去噪："
+                + "，".join(f"{k}{v}" for k, v in sorted(noise_total.items(), key=lambda x: -x[1])[:5])
+            )
+        if video_errors:
+            notes.append(f"{len(video_errors)} 个视频采集失败（其余已入库）")
+
         stats = {
             "total": len(all_posts),
             "accepted": len(all_posts),
             "inserted": inserted,
             "duplicates": max(len(all_posts) - inserted, 0),
-            "rejected": 0,
-            "errors": [],
+            "rejected": sum(noise_total.values()),
+            "errors": video_errors[:20],
             "videos": video_summaries,
+            "videos_rejected": [
+                {
+                    "bvid": v.get("bvid"),
+                    "title": v.get("title"),
+                    "reason": v.get("reject_reason"),
+                }
+                for v in rejected_videos[:20]
+            ],
+            "noise_filtered": noise_total,
+            "filter_titles": filter_titles and not bool(video_ref),
+            "filter_comments": filter_comments,
+            "logged_in": _has_sessdata(),
+            "notes": notes,
             "source": "bilibili_collect",
         }
         finished = store.finish_import_job(job["id"], status="succeeded", stats=stats)

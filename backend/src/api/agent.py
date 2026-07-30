@@ -24,6 +24,11 @@ class ChatTurn(BaseModel):
 class AgentChatIn(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     history: list[ChatTurn] = Field(default_factory=list, max_length=6)
+    bvid: str | None = Field(default=None, max_length=200)
+
+
+class AgentBriefIn(BaseModel):
+    bvid: str | None = Field(default=None, max_length=200)
 
 
 @router.get("/agent/status")
@@ -35,7 +40,7 @@ def get_agent_status():
 def post_agent_chat(body: AgentChatIn):
     try:
         history = [t.model_dump() for t in body.history]
-        data = agent_chat(body.question, history=history)
+        data = agent_chat(body.question, history=history, bvid=body.bvid)
         return ok(data)
     except ValueError as exc:
         return err("invalid_question", str(exc), status=400)
@@ -46,9 +51,9 @@ def post_agent_chat(body: AgentChatIn):
 
 
 @router.post("/agent/brief")
-def post_agent_brief():
+def post_agent_brief(body: AgentBriefIn = AgentBriefIn()):
     try:
-        data = agent_brief()
+        data = agent_brief(bvid=body.bvid)
         return ok(data)
     except AgentUnavailableError as exc:
         return err("agent_unavailable", str(exc), status=503)

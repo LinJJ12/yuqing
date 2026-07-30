@@ -142,6 +142,20 @@ export async function fetchReportSummary() {
   return data
 }
 
+export async function fetchVideoSummaries(limit = 50) {
+  const { data } = await withFallback(api, 'get', '/reports/videos', {
+    params: { limit },
+  })
+  return data
+}
+
+export async function fetchVideoReport(bvid) {
+  const { data } = await withFallback(api, 'get', '/reports/video', {
+    params: { bvid },
+  })
+  return data
+}
+
 export async function generateReportSummary({ with_ai = false } = {}) {
   const { data } = await withFallback(slowApi, 'post', '/reports/summary', {
     data: { with_ai },
@@ -194,15 +208,24 @@ export async function fetchAgentStatus() {
   return data
 }
 
-export async function agentChat(question, history = []) {
+export async function agentChat(question, history = [], { bvid } = {}) {
   const { data } = await withFallback(slowApi, 'post', '/agent/chat', {
-    data: { question, history },
+    data: { question, history, bvid: bvid || null },
   })
   return data
 }
 
-export async function agentBrief() {
-  const { data } = await withFallback(slowApi, 'post', '/agent/brief')
+export async function agentBrief({ bvid } = {}) {
+  const { data } = await withFallback(slowApi, 'post', '/agent/brief', {
+    data: { bvid: bvid || null },
+  })
+  return data
+}
+
+export async function deletePosts(payload) {
+  const { data } = await withFallback(api, 'post', '/posts/delete', {
+    data: payload,
+  })
   return data
 }
 

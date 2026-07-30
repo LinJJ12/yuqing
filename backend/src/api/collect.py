@@ -19,8 +19,20 @@ class BilibiliCollectBody(BaseModel):
     )
     topic: str | None = Field(default=None, max_length=100)
     max_videos: int = Field(default=3, ge=1, le=10)
-    max_comments_per_video: int = Field(default=40, ge=1, le=200)
+    max_comments_per_video: int = Field(default=50, ge=1, le=200)
     include_video_title: bool = False
+    filter_titles: bool = Field(
+        default=True,
+        description="关键词搜索时启用标题黑名单 + 须命中搜索词（BV 直采不适用）",
+    )
+    filter_comments: bool = Field(
+        default=True,
+        description="过滤空评/纯表情/刷评等噪声",
+    )
+    require_keyword_hit: bool = Field(
+        default=True,
+        description="关键词搜索时标题须包含搜索词片段",
+    )
 
 
 @router.post("/bilibili")
@@ -35,6 +47,9 @@ def collect_bilibili_endpoint(body: BilibiliCollectBody):
             max_videos=body.max_videos,
             max_comments_per_video=body.max_comments_per_video,
             include_video_title=body.include_video_title,
+            filter_titles=body.filter_titles,
+            filter_comments=body.filter_comments,
+            require_keyword_hit=body.require_keyword_hit,
         )
     except BilibiliCollectError as exc:
         return err("collect_failed", str(exc), status=502)

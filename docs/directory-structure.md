@@ -45,7 +45,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 ```text
 浏览器
   └─ frontend/src/api/  ──HTTP──►  backend/src/api/
-                                      ├─ services/   # 导入 / B站采集 / 情感 / 主题 / 预警 / Agent
+                                      ├─ services/   # 导入 / B站采集与质量门禁 / 情感 / 主题 / 预警 / 视频口碑 / Agent
                                       ├─ storage/    # SQLite
                                       └─ config/     # settings / CUDA / Ollama / Cookie
 ```
@@ -62,7 +62,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | `backend/src/config/` | 配置与设备探测 | 业务规则、SQL |
 | `backend/src/lib/` | 无业务词工具 | 堆业务代码 |
 | `backend/scripts/` | 样例生成、冒烟脚本 | 被 api 运行时依赖 |
-| `backend/data/` | 运行时 DB/导入/样例 | 提交进 Git（除说明文件） |
+| `backend/data/` | 运行时 DB/导入/样例 | 提交进 Git（除说明与 samples） |
 
 细则：[`backend/src/README.md`](../backend/src/README.md) 及各子目录 README。
 
@@ -75,8 +75,9 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | `frontend/src/api/` | **唯一** HTTP 出口 | 在 pages 里裸 `axios`/`fetch` |
 | `frontend/src/pages/` | 路由级页面 | 直接拼后端 URL、持有密钥 |
 | `frontend/src/router/` | 路由表 | 业务请求 |
-| `frontend/src/components/` | 可复用 UI 块 | 绕过 api 层发请求 |
+| `frontend/src/components/` | 可复用 UI 块（含 `layout/`） | 绕过 api 层发请求 |
 | `frontend/src/assets/` | 静态资源 | 业务逻辑 |
+| `frontend/src/style.css` | 全局样式（Vite 惯例，由 `main.js` 引入） | — |
 
 细则：[`frontend/src/README.md`](../frontend/src/README.md)。
 
@@ -84,13 +85,14 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 
 ## 4. 前后端 API 垂直表（改接口必同步）
 
-| 前端 `src/api` | 后端路由前缀 |
-|----------------|--------------|
-| `client.js` → health / overview / posts / imports | `/api/v1/health*` `/dashboard` `/posts` `/imports` |
-| collect (B 站) | `/api/v1/collect/bilibili` |
-| sentiment / topics / analysis-jobs | `/api/v1/analysis/*` `/analysis-jobs` |
-| alerts / trends / reports / settings | `/api/v1/alerts` `/trends` `/reports/*` `/settings/*` |
-| agent | `/api/v1/agent/*` |
+| 前端 `src/api/client.js` | 后端路由前缀 | 后端文件 |
+|--------------------------|--------------|----------|
+| health / overview / posts / imports / deletePosts | `/health*` `/dashboard` `/posts` `/posts/delete` `/imports` | `health.py` `data.py` |
+| collectBilibili | `/collect/bilibili` | `collect.py` |
+| sentiment / topics / analysis-jobs | `/analysis/*` `/analysis-jobs` | `analysis.py` |
+| alerts / trends / alert-keywords | `/alerts` `/trends` `/settings/alert-keywords` | `alerts.py` |
+| report summary / videos / video / export | `/reports/*` | `reports.py` |
+| agent status / chat / brief | `/agent/*` | `agent.py` |
 
 统一响应：`{ "ok": true, "data": ... }` / `{ "ok": false, "error": { "code", "message" } }`。
 
@@ -103,8 +105,8 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | [`docs/README.md`](./README.md) | 跨端文档 |
 | [`diagrams.md`](./diagrams.md) | 流程 · 思维导图 · 架构图 |
 | [`model-cache.md`](./model-cache.md) | 演示就绪：模型预取 / Ollama |
-| [`real-data-collection.md`](./real-data-collection.md) | 内嵌 B 站评论 + 外挂 MediaCrawler |
-| [`directory-structure.md`](./directory-structure.md) | 目录与 API 垂直表 |
+| [`real-data-collection.md`](./real-data-collection.md) | 内嵌 B 站评论 + 质量门禁 + MediaCrawler |
+| [`directory-structure.md`](./directory-structure.md) | 目录与 API 垂直表（本文） |
 | [`../.trellis/README.md`](../.trellis/README.md) | 方案与门禁 |
 | [`../vendor/README.md`](../vendor/README.md) | 参考仓 |
 | [`../frontend/README.md`](../frontend/README.md) | 前端工程 |
@@ -124,5 +126,15 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | [`../backend/scripts/README.md`](../backend/scripts/README.md) | 运维脚本 |
 | [`../backend/data/README.md`](../backend/data/README.md) | 运行时数据 |
 | [`../backend/docs/README.md`](../backend/docs/README.md) | 后端专用文档 |
+
+### 本地/忽略路径（勿当业务代码）
+
+| 路径 | 说明 |
+|------|------|
+| `.tools/` | 本机工具（如 gh），已 gitignore |
+| `.vscode/` | 编辑器配置，已 gitignore |
+| `frontend/dist/` | 前端构建产物，已 gitignore |
+| `backend/data/*` | 运行时库与导入（samples 可提交） |
+| `vendor/*` | 参考仓克隆，仅提交 `vendor/README.md` |
 
 新增功能时：**先改对应层 README 的职责/禁止，再写代码**。

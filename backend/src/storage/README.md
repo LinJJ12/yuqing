@@ -11,16 +11,17 @@
 
 | 文件 | 说明 |
 |------|------|
-| `db.py` | `Store` / `get_store` / `utc_now` |
+| `db.py` | `Store` / `get_store` / `utc_now`；含按 bvid 列表、视频聚合、条件删除 |
 
 ## 约定
 
 - DB 路径默认 `backend/data/yuqing.db`（见 `config.settings`）。
 - 表：`posts`、`import_jobs`、`analysis_jobs`、`app_settings`。
+- B 站视频元数据在 `posts.raw_json`（`extra.bvid` / `extra.video_title`），经 `json_extract` 查询。
 - `__init__.py` 仅作包标记，不堆再导出。
 
 ## 禁止
 
 - 调用 HuggingFace、Ollama、BERT、BERTopic
 - 依赖 `api/` 或解析 HTTP 表单
-- 在本层拼「预警文案 / 报告段落」（属 `services/forecast`）
+- 在本层拼「预警文案 / 报告段落」（属 `services/forecast` / `video_report`）

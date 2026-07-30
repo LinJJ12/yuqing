@@ -12,23 +12,27 @@
 
 | 文件 | 路由域 |
 |------|--------|
-| `app.py` | 创建 `FastAPI` 应用 |
-| `health.py` | `/api/v1/health/*` |
-| `data.py` | `/imports` `/posts` `/dashboard/overview` |
-| `alerts.py` | `/alerts` `/trends` `/reports/*` `/settings/alert-keywords` |
+| `app.py` | 创建 `FastAPI` 应用、挂载各 router |
+| `health.py` | `/health/*` |
+| `data.py` | `/imports` `/posts` `/posts/delete` `/dashboard/overview` |
+| `collect.py` | `/collect/bilibili`（含标题门禁 / 评论去噪参数） |
 | `analysis.py` | `/analysis/*` `/analysis-jobs` |
-| `agent.py` | `/agent/status` `/agent/chat` `/agent/brief` |
-| `collect.py` | `/collect/bilibili` |
+| `alerts.py` | `/alerts` `/trends` `/settings/alert-keywords` |
+| `reports.py` | `/reports/summary` `/reports/videos` `/reports/video` `/reports/export.*` |
+| `agent.py` | `/agent/status` `/agent/chat` `/agent/brief`（可选 `bvid`） |
 
 ## 下一层怎么选
 
 | 请求类型 | 下一层 |
 |----------|--------|
-| 导入 / 列表 / 总览读写 | `storage/`（经 `services/ingest` 做规范化） |
-| B 站评论采集 | `services/bilibili_collect` |
+| 导入 / 列表 / 删除 / 总览 | `storage/`（导入经 `services/ingest`） |
+| B 站评论采集 | `services/bilibili_collect` + `bilibili_quality` |
 | 情感 / 主题推理 | `services/sentiment` · `services/topics` |
-| 预警 / 趋势 / 报告汇总 | `services/forecast` |
-| CUDA / 模型名 / 端口 | `config/` |
+| 预警 / 趋势 / 全局报告摘要 | `services/forecast` |
+| 单视频口碑 | `services/video_report` |
+| 报告导出 / AI 摘要 | `services/report` |
+| Agent 问答 / 简报 | `services/agent` |
+| CUDA / 模型名 / Cookie | `config/` |
 
 ## 禁止
 
@@ -36,3 +40,4 @@
 - 手写 SQL（必须经 `storage/`）
 - 返回与 `{ok,data|error}` 不一致的随意 JSON（用 `src.lib.http.ok/err`）
 - 依赖 `frontend/` 或 `vendor/`
+- 把报告路由再塞回 `alerts.py`（报告域用 `reports.py`）

@@ -12,7 +12,7 @@
 | 主题 | 词云 + BERTopic（本地 Ollama 向量） |
 | 趋势 | 滑动平均 + Prophet |
 | 预警 | 负面/敏感词（可配置）+ 热度突增 |
-| 报告 | 页面汇总 + PDF/CSV；可选 OpenAI 兼容摘要 |
+| 报告 | 页面汇总 + **单视频口碑** + PDF/CSV；可选 OpenAI 兼容摘要 |
 | 采集 | 文件导入；内嵌 B 站评论；外挂 MediaCrawler（见 docs/real-data-collection.md） |
 | 助手 | 舆情问答 + 简报（OpenAI 兼容 / Ollama Chat） |
 

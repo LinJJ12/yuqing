@@ -55,7 +55,42 @@ Content-Type: application/json
 }
 ```
 
-有 `video` 时优先按单视频拉评论。入库平台码为 `bili`，并记入 `import_jobs`。
+也可填 `video`（BV 号或链接）；有 `video` 时优先按单视频拉评论。入库平台码为 `bili`，并记入 `import_jobs`。
+
+### 单视频口碑报告
+
+| 项 | 说明 |
+|----|------|
+| 列表 | `GET /api/v1/reports/videos` |
+| 详情 | `GET /api/v1/reports/video?bvid=BV…`（也支持视频链接） |
+| 服务 | `backend/src/services/video_report.py` |
+| 前端 | 报告页「单视频口碑」；监测页评论卡片「查看口碑」 |
+
+报告内容：情感占比、高频词、敏感/负面样例、规则生成的观众反馈结论。
+
+助手页可填同一 BV，生成「观众反馈」问答/简报（`POST /agent/chat|brief` 传 `bvid`）。
+
+### 数据质量门禁（默认开启）
+
+| 项 | 行为 |
+|----|------|
+| 标题黑名单 | 关键词搜索时跳过含「一口气看完 / 规则怪谈 / 番剧 / 动漫…」等标题；**BV 直采不套用** |
+| 须命中搜索词 | 标题需包含关键词或其片段（可关 `require_keyword_hit` / `filter_titles`） |
+| 评论去噪 | 丢弃空评、纯表情、过短、重复刷评（`filter_comments`） |
+| Cookie | 配置 `BILIBILI_SESSDATA` 后多翻页 + 尝试补拉二级回复，评论量更够做口碑 |
+
+请求体可选：`filter_titles`、`filter_comments`、`require_keyword_hit`（默认均为 `true`）。
+
+### 清理噪声
+
+```http
+POST /api/v1/posts/delete
+Content-Type: application/json
+
+{ "title_contains": "封校疑云", "platform": "bili", "dry_run": true }
+```
+
+`dry_run: false` 时真删。监测页提供预览/删除入口。
 
 ### 话题（topic）回退
 

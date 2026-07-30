@@ -6,15 +6,25 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
+from pydantic import BaseModel, Field
 
 from src.config.settings import settings
 from src.lib.http import err, ok
+from src.services.bilibili_collect import normalize_bvid
 from src.services.ingest import import_file
 from src.storage.db import get_store
 
 router = APIRouter(tags=["data"])
 
 ALLOWED = {".json", ".jsonl", ".ndjson", ".csv"}
+
+
+class DeletePostsBody(BaseModel):
+    bvid: str | None = Field(default=None, max_length=200)
+    title_contains: str | None = Field(default=None, max_length=200)
+    topic: str | None = Field(default=None, max_length=100)
+    platform: str | None = Field(default=None, max_length=40)
+    dry_run: bool = False
 
 
 @router.post("/imports")
@@ -105,6 +115,25 @@ def list_posts(
             "order": order,
         }
     )
+
+
+@router.post("/posts/delete")
+def delete_posts(body: DeletePostsBody):
+    """按 BV / 视频标题包含 / 话题 清理噪声帖。默认 dry_run=false 真删。"""
+    bvid = normalize_bvid(body.bvid) if body.bvid else None
+    if body.bvid and body.bvid.strip() and not bvid:
+        bvid = body.bvid.strip()
+    try:
+        result = get_store().delete_posts(
+            bvid=bvid,
+            video_title_contains=body.title_contains,
+            topic=body.topic,
+            platform=body.platform,
+            dry_run=body.dry_run,
+        )
+    except ValueError as exc:
+        return err("invalid_request", str(exc), status=400)
+    return ok(result)
 
 
 @router.get("/dashboard/overview")

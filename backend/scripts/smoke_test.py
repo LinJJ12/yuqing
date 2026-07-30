@@ -113,6 +113,75 @@ def main() -> None:
         check("trend prefers fetched_at", days.get("2026-07-30", 0) >= 1, str(days))
         check("trend ignores old published alone", days.get("2020-01-01", 0) == 0, str(days))
 
+        # 单视频口碑：写入带 bvid 的评论后可聚合
+        from src.services.video_report import build_video_report, list_video_summaries
+
+        bili_posts = []
+        for i, (lab, txt) in enumerate(
+            [
+                ("negative", "差评离谱失望，剪辑太劝退"),
+                ("positive", "好看推荐，非常满意给力"),
+                ("neutral", "一般看看就行"),
+            ]
+        ):
+            p = normalize_post(
+                {
+                    "id": f"bili-cmt-smoke-{i}",
+                    "text": txt,
+                    "platform": "bili",
+                    "topic": "测试视频",
+                    "extra": {
+                        "bvid": "BV1SmokeTest999",
+                        "video_title": "口碑冒烟测试视频",
+                        "aid": 1,
+                    },
+                },
+                platform="bili",
+                topic="测试视频",
+            )
+            p["sentiment_label"] = lab
+            p["sentiment"] = {"positive": 1, "neutral": 0, "negative": -1}[lab]
+            p["sentiment_method"] = "lexicon"
+            bili_posts.append(p)
+        store.insert_posts("job-bili-smoke", bili_posts)
+        vids = list_video_summaries(limit=20)
+        check(
+            "video list has smoke bvid",
+            any(v.get("bvid") == "BV1SmokeTest999" for v in vids),
+            str(vids[:3]),
+        )
+        vrep = build_video_report("BV1SmokeTest999")
+        check("video report count", vrep["overview"]["total_posts"] == 3, str(vrep["overview"]))
+        check("video report conclusion", bool(vrep.get("conclusion")), vrep.get("conclusion", "")[:80])
+        r = client.get("/api/v1/reports/video", params={"bvid": "BV1SmokeTest999"})
+        check("video report api", r.status_code == 200 and r.json()["ok"] is True, r.text[:200])
+        r = client.get("/api/v1/reports/videos")
+        check("video list api", r.status_code == 200 and r.json()["ok"] is True)
+
+        # 清理噪声 + 质量门禁
+        from src.services.bilibili_quality import title_reject_reason, denoise_comments
+
+        check(
+            "title blacklist",
+            title_reject_reason("一口气看完怪谈全集", keyword="宿舍") is not None,
+        )
+        kept, noise = denoise_comments(
+            [{"text": "好看"}, {"text": "好看"}, {"text": "😂😂"}, {"text": "中段广告太长差评"}]
+        )
+        check("denoise keeps useful", any("广告" in (x.get("text") or "") for x in kept), str(kept))
+        check("denoise drops dup", noise.get("重复正文", 0) >= 1, str(noise))
+
+        r = client.post(
+            "/api/v1/posts/delete",
+            json={"title_contains": "__no_such_title__", "platform": "bili", "dry_run": True},
+        )
+        check("delete dry empty", r.status_code == 200 and r.json()["data"]["matched"] == 0)
+        r = client.post("/api/v1/posts/delete", json={})
+        check("delete requires filter", r.status_code == 400)
+
+        r = client.post("/api/v1/agent/brief", json={"bvid": "BV1SmokeTest999"})
+        check("agent brief video status", r.status_code in (200, 503), str(r.status_code))
+
         r = client.get("/api/v1/reports/summary")
         check("reports", r.status_code == 200 and r.json()["ok"] is True)
 

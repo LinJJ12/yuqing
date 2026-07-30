@@ -10,9 +10,9 @@ backend/
 ├── scripts/                # 样例生成等
 ├── docs/                   # 后端专用文档
 └── src/
-    ├── api/                # HTTP：校验、组响应；不写业务算法
+    ├── api/                # HTTP：校验、组响应；alerts / reports 分文件
     ├── config/             # settings + device
-    ├── services/           # 单步能力：情感 / 主题 / 导入 / 预警
+    ├── services/           # 单步能力：情感 / 主题 / 导入 / B站采集与质量 / 口碑 / Agent
     ├── storage/            # SQLite 唯一业务 I/O
     └── lib/                # 极瘦无业务工具（预留）
 ```

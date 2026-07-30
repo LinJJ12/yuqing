@@ -16,6 +16,7 @@ from src.api.agent import router as agent_router
 from src.api.collect import router as collect_router
 from src.api.data import router as data_router
 from src.api.health import router as health_router
+from src.api.reports import router as reports_router
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
     app.include_router(collect_router, prefix="/api/v1")
     app.include_router(analysis_router, prefix="/api/v1")
     app.include_router(alerts_router, prefix="/api/v1")
+    app.include_router(reports_router, prefix="/api/v1")
     app.include_router(agent_router, prefix="/api/v1")
 
     @app.get("/")

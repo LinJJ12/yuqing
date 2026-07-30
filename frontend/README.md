@@ -15,6 +15,7 @@ frontend/
 │   ├── router/
 │   ├── components/   # 共享组件（按需）
 │   ├── assets/
+│   ├── style.css     # 全局样式（Vite 惯例）
 │   ├── App.vue
 │   └── main.js
 ├── vite.config.js    # /api → 127.0.0.1:8001

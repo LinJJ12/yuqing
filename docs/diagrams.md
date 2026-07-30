@@ -129,7 +129,7 @@ mindmap
       负面敏感预警
       日报导出
     一期已结
-      Vue3 七业务页
+      Vue3 八业务页
       FastAPI 统一包络
       SQLite
       词典加 BERT
@@ -366,11 +366,13 @@ erDiagram
 | 前端能力 | `frontend/src/api` | 后端路由 |
 |----------|-------------------|----------|
 | 健康 / CUDA | `fetchHealthReady` | `/api/v1/health/*` |
-| 总览 / 帖子 / 导入 | `fetchOverview` · `fetchPosts` · `uploadImport` | `/dashboard/overview` · `/posts` · `/imports` |
+| 总览 / 帖子 / 导入 / 清理 | `fetchOverview` · `fetchPosts` · `uploadImport` · `deletePosts` | `/dashboard/overview` · `/posts` · `/posts/delete` · `/imports` |
+| B 站采集 | `collectBilibili` | `/collect/bilibili` |
 | 情感 / 主题 | `runSentiment` · `runTopics` · … | `/analysis/sentiment*` · `/analysis/topics*` |
 | 异步任务 | `createAnalysisJob` · `fetchAnalysisJob` | `/analysis-jobs` |
 | 预警 / 趋势 | `fetchAlerts` · `fetchTrends` | `/alerts` · `/trends` |
-| 报告 | `fetchReportSummary` · `reportPdfUrl` · … | `/reports/summary` · `/reports/export.*` |
+| 报告 / 视频口碑 | `fetchReportSummary` · `fetchVideoReport` · `fetchVideoSummaries` · export | `/reports/summary` · `/reports/video` · `/reports/videos` · `/reports/export.*` |
+| 助手 | `agentChat` · `agentBrief`（可选 `bvid`） | `/agent/chat` · `/agent/brief` |
 | 敏感词 | `fetchAlertKeywords` · `saveAlertKeywords` | `/settings/alert-keywords` |
 
 统一响应：`{ "ok": true, "data": ... }` / `{ "ok": false, "error": { "code", "message" } }`。
@@ -386,17 +388,20 @@ flowchart TB
     O --> T["/topics 热点话题"]
     O --> A["/alerts 预警中心"]
     O --> R["/reports 分析报告"]
+    O --> AG["/agent 智能助手"]
     O --> SET["/settings 系统设置"]
 
-    M --> S
+    M -->|贴 BV 采集| R
+    M -->|清理噪声| M
+    R -->|?bvid 口碑| AG
     S --> T
     T --> A
     A --> R
     SET -.->|改敏感词影响| A
 ```
 
-**一期有：** 总览、监测导入、情感（同步+后台任务）、话题、预警（含 Prophet 趋势）、报告（页面+PDF/CSV+可选 AI）、设置（健康+敏感词）。  
-**一期没有：** 登录页、家长/权限页、爬虫配置台、多 Agent 画布。
+**已有：** 总览、监测（BV 采集 / 导入 / 噪声清理）、情感、话题、预警（含 Prophet 趋势）、报告（全局汇总 + 单视频口碑）、助手（可选 BV 观众反馈）、设置（健康 + 敏感词）。  
+**没有：** 登录页、家长/权限页、爬虫配置台、多 Agent 画布。
 
 ---
 
@@ -407,6 +412,6 @@ flowchart TB
 | §1 流程图 | 演示闭环、导入、情感同步/异步、报告导出怎么走 |
 | §2 思维导图 | 范围边界、模块拆分、防范围膨胀 |
 | §3 架构图 | `api → services → storage`、目录落地、数据关系、API 对照 |
-| §4 信息架构 | 七个业务页有哪些、没有哪些 |
+| §4 信息架构 | 八个业务页有哪些、没有哪些 |
 
 如需导出 PNG/SVG，可用 Mermaid CLI 或 IDE 插件对上述代码块导出。

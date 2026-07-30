@@ -15,9 +15,9 @@
 | `pages/` | 路由级页面 |
 | `router/` | Vue Router |
 | `components/` | 可复用 UI（可选） |
-| `assets/` | 样式与静态资源 |
+| `assets/` | 图标等静态资源（全局样式见同级 `style.css`） |
 
-入口：`main.js` · `App.vue`
+入口：`main.js` · `App.vue` · `style.css`（全局样式，Vite 惯例放在 `src/` 根）
 
 ## 禁止
 

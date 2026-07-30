@@ -1,9 +1,12 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { Bot, Copy, FileText, Send } from '@lucide/vue'
 import { agentBrief, agentChat, fetchAgentStatus } from '../api/client'
 
-const question = ref('当前主要风险是什么？有哪些建议？')
+const route = useRoute()
+const question = ref('该视频评论负面主要集中在哪些点？有什么建议？')
+const bvid = ref('')
 const history = ref([])
 const answer = ref('')
 const digest = ref(null)
@@ -34,6 +37,7 @@ async function onAsk() {
     const res = await agentChat(
       q,
       history.value.map((h) => ({ role: h.role, content: h.content })),
+      { bvid: bvid.value.trim() || undefined },
     )
     if (!res.ok) {
       error.value = res.error?.message || '问答失败'
@@ -46,7 +50,8 @@ async function onAsk() {
       { role: 'user', content: q },
       { role: 'assistant', content: answer.value },
     ].slice(-6)
-    message.value = `来源：${res.data.provider} / ${res.data.model}`
+    const scope = res.data.context_digest?.scope === 'video' ? '单视频' : '全局'
+    message.value = `来源：${res.data.provider} / ${res.data.model}（${scope}）`
   } catch (e) {
     error.value = e.message || '请求失败'
   } finally {
@@ -59,7 +64,7 @@ async function onBrief() {
   message.value = ''
   loadingBrief.value = true
   try {
-    const res = await agentBrief()
+    const res = await agentBrief({ bvid: bvid.value.trim() || undefined })
     if (!res.ok) {
       error.value = res.error?.message || '简报生成失败'
       return
@@ -71,7 +76,8 @@ async function onBrief() {
       model: res.data.model,
       digest: res.data.context_digest,
     }
-    message.value = `简报来源：${res.data.provider} / ${res.data.model}`
+    const scope = res.data.context_digest?.scope === 'video' ? '观众反馈' : '全局'
+    message.value = `简报来源：${res.data.provider} / ${res.data.model}（${scope}）`
   } catch (e) {
     error.value = e.message || '请求失败'
   } finally {
@@ -88,6 +94,14 @@ async function copyBrief() {
     error.value = '复制失败，请手动选择文本'
   }
 }
+
+watch(
+  () => route.query.bvid,
+  (v) => {
+    if (v) bvid.value = String(v)
+  },
+  { immediate: true },
+)
 
 onMounted(async () => {
   try {
@@ -111,10 +125,14 @@ onMounted(async () => {
         </span>
       </div>
       <p class="hint">
-        基于当前库内统计与样例回答问题、生成简报。优先云端 OpenAI 兼容接口，否则本机 Ollama Chat。
+        可填 BV 限定「单视频观众反馈」；留空则用全局库统计。优先云端 OpenAI 兼容接口，否则本机 Ollama Chat。
         {{ status?.message }}
       </p>
       <p v-if="status?.hint" class="hint">{{ status.hint }}</p>
+      <label class="field">
+        BV / 链接（可选，限定单视频）
+        <input v-model="bvid" class="input" placeholder="留空=全局；填 BV 则按该视频评论回答" />
+      </label>
       <p v-if="message" class="ok-text">{{ message }}</p>
       <p v-if="error" class="err">{{ error }}</p>
     </section>
@@ -123,7 +141,12 @@ onMounted(async () => {
       <div class="panel-head">
         <h3>舆情问答</h3>
       </div>
-      <textarea v-model="question" class="textarea" rows="3" placeholder="例如：该视频评论负面主要集中在哪些点？" />
+      <textarea
+        v-model="question"
+        class="textarea"
+        rows="3"
+        placeholder="例如：该视频评论负面主要集中在哪些点？"
+      />
       <div class="actions">
         <button
           type="button"
@@ -159,7 +182,7 @@ onMounted(async () => {
             @click="onBrief"
           >
             <FileText :size="14" />
-            {{ loadingBrief ? '生成中…' : '一键生成' }}
+            {{ loadingBrief ? '生成中…' : bvid.trim() ? '观众反馈简报' : '一键生成' }}
           </button>
           <button
             type="button"
@@ -172,7 +195,9 @@ onMounted(async () => {
           </button>
         </div>
       </div>
-      <p class="hint">比报告页「AI 摘要」更长，含态势 / 话题 / 风险 / 建议。</p>
+      <p class="hint">
+        {{ bvid.trim() ? '将基于该 BV 评论生成观众反馈简报。' : '全局简报：态势 / 话题 / 风险 / 建议。' }}
+      </p>
       <h4 v-if="briefMeta?.title">{{ briefMeta.title }}</h4>
       <p v-if="brief" class="answer-text brief">{{ brief }}</p>
       <p v-else class="hint">尚未生成简报。</p>
@@ -181,6 +206,14 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
 .actions {
   display: flex;
   gap: 0.6rem;

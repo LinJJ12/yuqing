@@ -11,8 +11,8 @@
 
 | 路径 | 说明 |
 |------|------|
-| `layout/AppSidebar.vue` | 品牌、导航图标、后端状态、收起 |
-| `layout/AppTopBar.vue` | 面包屑标题、连接状态、刷新 |
+| `layout/AppSidebar.vue` | 品牌、主导航、收起 |
+| `layout/AppTopBar.vue` | 页面标题、后端连接状态、刷新 |
 
 ## 禁止
 

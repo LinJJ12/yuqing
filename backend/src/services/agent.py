@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from src.config.settings import settings
+from src.services.bilibili_collect import normalize_bvid
 from src.services.forecast import build_report_summary, detect_alerts
 from src.storage.db import get_store
 
@@ -16,8 +17,39 @@ class AgentUnavailableError(RuntimeError):
     """未配置可用 LLM。"""
 
 
-def build_opinion_context(limit_posts: int = 8) -> dict[str, Any]:
+def build_opinion_context(limit_posts: int = 8, *, bvid: str | None = None) -> dict[str, Any]:
     store = get_store()
+    bvid_key = normalize_bvid(bvid) if bvid else None
+    if bvid and bvid.strip() and not bvid_key:
+        bvid_key = bvid.strip()
+
+    if bvid_key:
+        from src.services.video_report import build_video_report
+
+        report = build_video_report(bvid_key)
+        samples = [
+            {
+                "id": p.get("id"),
+                "author": p.get("author"),
+                "text": (p.get("text") or "")[:160],
+                "sentiment_label": p.get("sentiment_label"),
+            }
+            for p in (report.get("sample_posts") or [])[:limit_posts]
+        ]
+        return {
+            "scope": "video",
+            "bvid": report.get("bvid"),
+            "video_title": report.get("video_title"),
+            "source_url": report.get("source_url"),
+            "conclusion": report.get("conclusion"),
+            "overview": report.get("overview"),
+            "sentiment": report.get("sentiment"),
+            "word_cloud": (report.get("word_cloud") or [])[:12],
+            "alerts": report.get("alerts"),
+            "sample_posts": samples,
+            "notes": report.get("notes"),
+        }
+
     overview = store.overview()
     sentiment = store.sentiment_stats()
     alerts_all = detect_alerts()
@@ -45,6 +77,7 @@ def build_opinion_context(limit_posts: int = 8) -> dict[str, Any]:
         for p in posts[:limit_posts]
     ]
     return {
+        "scope": "global",
         "overview": {
             "total_posts": overview.get("total_posts"),
             "by_topic": overview.get("by_topic", [])[:8],
@@ -163,58 +196,104 @@ def agent_chat(
     question: str,
     *,
     history: list[dict[str, str]] | None = None,
+    bvid: str | None = None,
 ) -> dict[str, Any]:
     q = (question or "").strip()
     if not q:
         raise ValueError("问题不能为空")
-    ctx = build_opinion_context()
-    system = (
-        "你是社交媒体舆情与观众反馈分析助手。根据提供的统计与样例回答用户问题，"
-        "语气客观简洁，可给 1～3 条可执行建议。若数据不足请明确说明。"
-    )
+    ctx = build_opinion_context(bvid=bvid)
+    if ctx.get("scope") == "video":
+        system = (
+            "你是 B 站视频观众反馈分析助手。根据该视频下评论的统计与样例回答，"
+            "聚焦口碑、槽点与可执行建议。勿编造未出现的评论内容；数据不足请说明。"
+        )
+    else:
+        system = (
+            "你是社交媒体舆情与观众反馈分析助手。根据提供的统计与样例回答用户问题，"
+            "语气客观简洁，可给 1～3 条可执行建议。若数据不足请明确说明。"
+        )
     user = _context_prompt(ctx) + f"\n\n用户问题：{q}"
     result = _chat_completion(system=system, user=user, history=history, max_tokens=900)
+    digest = {
+        "scope": ctx.get("scope"),
+        "total_posts": (ctx.get("overview") or {}).get("total_posts"),
+    }
+    if ctx.get("scope") == "video":
+        digest.update(
+            {
+                "bvid": ctx.get("bvid"),
+                "video_title": ctx.get("video_title"),
+                "conclusion": ctx.get("conclusion"),
+            }
+        )
+    else:
+        digest.update(
+            {
+                "alerts_high": (ctx.get("alerts") or {}).get("high"),
+                "topics": (ctx.get("overview") or {}).get("by_topic"),
+            }
+        )
     return {
         **result,
         "question": q,
-        "context_digest": {
-            "total_posts": ctx["overview"].get("total_posts"),
-            "alerts_high": ctx["alerts"].get("high"),
-            "topics": ctx["overview"].get("by_topic"),
-        },
+        "bvid": ctx.get("bvid"),
+        "context_digest": digest,
     }
 
 
-def agent_brief() -> dict[str, Any]:
-    ctx = build_opinion_context(limit_posts=10)
-    summary = build_report_summary(with_prophet=False)
-    system = (
-        "你是舆情简报作者。请写一篇 250～450 字的中文简报，"
-        "结构包含：总体态势、主要话题、风险与预警、建议措施。"
-        "只基于给定数据，不要编造具体人名或未出现的事件。"
-    )
-    user = (
-        _context_prompt(ctx)
-        + "\n\n报告摘要字段：\n"
-        + json.dumps(
-            {
-                "generated_for": summary.get("generated_for"),
-                "notes": summary.get("notes"),
-                "prophet": summary.get("prophet"),
-            },
-            ensure_ascii=False,
+def agent_brief(*, bvid: str | None = None) -> dict[str, Any]:
+    ctx = build_opinion_context(limit_posts=10, bvid=bvid)
+    if ctx.get("scope") == "video":
+        system = (
+            "你是视频口碑简报作者。请写一篇 200～400 字中文「观众反馈」简报，"
+            "结构：总体口碑、主要槽点/亮点、风险信号、给 UP/运营的建议。"
+            "只基于给定数据，不要编造具体评论原文之外的事实。"
         )
-        + "\n\n请直接输出简报正文。"
-    )
+        user = (
+            _context_prompt(ctx)
+            + "\n\n请直接输出观众反馈简报正文。"
+        )
+        title = f"观众反馈简报 · {ctx.get('video_title') or ctx.get('bvid') or '视频'}"
+    else:
+        summary = build_report_summary(with_prophet=False)
+        system = (
+            "你是舆情简报作者。请写一篇 250～450 字的中文简报，"
+            "结构包含：总体态势、主要话题、风险与预警、建议措施。"
+            "只基于给定数据，不要编造具体人名或未出现的事件。"
+        )
+        user = (
+            _context_prompt(ctx)
+            + "\n\n报告摘要字段：\n"
+            + json.dumps(
+                {
+                    "generated_for": summary.get("generated_for"),
+                    "notes": summary.get("notes"),
+                    "prophet": summary.get("prophet"),
+                },
+                ensure_ascii=False,
+            )
+            + "\n\n请直接输出简报正文。"
+        )
+        title = "舆情简报（Agent）"
     result = _chat_completion(system=system, user=user, history=None, max_tokens=1400)
+    digest = {
+        "scope": ctx.get("scope"),
+        "total_posts": (ctx.get("overview") or {}).get("total_posts"),
+    }
+    if ctx.get("scope") == "video":
+        digest.update({"bvid": ctx.get("bvid"), "video_title": ctx.get("video_title")})
+    else:
+        digest.update(
+            {
+                "alerts_total": (ctx.get("alerts") or {}).get("total"),
+                "alerts_high": (ctx.get("alerts") or {}).get("high"),
+            }
+        )
     return {
         **result,
-        "title": "舆情简报（Agent）",
-        "context_digest": {
-            "total_posts": ctx["overview"].get("total_posts"),
-            "alerts_total": ctx["alerts"].get("total"),
-            "alerts_high": ctx["alerts"].get("high"),
-        },
+        "title": title,
+        "bvid": ctx.get("bvid"),
+        "context_digest": digest,
     }
 
 
