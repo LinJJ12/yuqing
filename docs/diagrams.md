@@ -1,6 +1,6 @@
 # Yuqing：流程 · 思维导图 · 架构图
 
-> **Yuqing** 是校园舆情监测工作台：文件导入 / B 站评论采集 → 本地 GPU 情感 / 主题分析 → 趋势预警 → 报告导出。  
+> **Yuqing** 是社交媒体舆情 / 观众反馈工作台：文件导入 / B 站评论采集 → 本地 GPU 情感 / 主题分析 → 趋势预警 → 报告导出。不局限于校园场景。  
 > **一期已结项：** Vue 3 工作台 + FastAPI BFF + SQLite；**无登录**；采集为文件导入。  
 > **二期已落地：** 外挂 MediaCrawler 转换导入；**内嵌 B 站评论采集**；轻量 Agent（问答 + 简报）。  
 > 下图均为 Mermaid，可在支持 Mermaid 的编辑器中预览。目录细则见 [`directory-structure.md`](./directory-structure.md)，真实采集见 [`real-data-collection.md`](./real-data-collection.md)。
@@ -112,17 +112,18 @@ flowchart LR
 
 ```mermaid
 mindmap
-  root((Yuqing 校园舆情))
+  root((Yuqing 舆情分析))
     用户
-      大创演示同学
-      校园运营观察者
+      演示与研究同学
+      内容运营 / 口碑观察
     价值
       本地 GPU 情感
       主题可解释
       预警可配置
       报告可下载
     场景
-      导入校园帖子
+      B 站视频评论口碑
+      文件导入多平台
       情感分布对比
       热点话题发现
       负面敏感预警

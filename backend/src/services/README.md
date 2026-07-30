@@ -21,7 +21,7 @@
 | `jobs.py` | 异步分析任务（进程内线程池） |
 | `readiness.py` | 情感缓存 / Ollama / 云端 LLM / Agent 就绪探测 |
 | `agent.py` | 轻量舆情问答与简报（OpenAI 兼容 / Ollama Chat） |
-| `bilibili_collect.py` | B 站关键词/BV 评论采集并入库 |
+| `bilibili_collect.py` | B 站关键词/BV 评论采集并入库；话题：显式 > 关键词 > 视频标题 |
 
 ## 调用
 

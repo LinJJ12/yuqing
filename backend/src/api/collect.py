@@ -12,7 +12,7 @@ router = APIRouter(prefix="/collect", tags=["collect"])
 
 
 class BilibiliCollectBody(BaseModel):
-    keyword: str | None = Field(default=None, description="搜索关键词，如：校园食堂")
+    keyword: str | None = Field(default=None, description="搜索关键词，如：数码评测")
     video: str | None = Field(
         default=None,
         description="视频 BV 号或链接（与 keyword 二选一或同时；有 video 时优先）",

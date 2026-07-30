@@ -309,6 +309,26 @@ def fetch_comments(
     return collected[:max_comments]
 
 
+def resolve_collect_topic(
+    *,
+    topic: str | None,
+    keyword: str | None,
+    video_titles: list[str] | None = None,
+) -> str:
+    """显式话题 > 搜索关键词 > 视频标题 > 默认。"""
+    explicit = (topic or "").strip()[:100]
+    if explicit:
+        return explicit
+    kw = (keyword or "").strip()
+    if kw:
+        return kw[:40]
+    for title in video_titles or []:
+        t = (title or "").strip()
+        if t:
+            return t[:100]
+    return "B站评论"
+
+
 def _to_posts(
     comments: list[dict[str, Any]],
     *,
@@ -318,8 +338,13 @@ def _to_posts(
     posts: list[dict] = []
     bvid = video.get("bvid") or ""
     title = video.get("title") or ""
+    base_url = video.get("url") or (f"https://www.bilibili.com/video/{bvid}" if bvid else None)
     for c in comments:
         rpid = c.get("rpid")
+        # 尽量带到评论锚点，方便前端「打开原评」
+        source_url = base_url
+        if base_url and rpid:
+            source_url = f"{base_url}#reply{rpid}"
         record = {
             "id": f"bili-cmt-{rpid}" if rpid else None,
             "text": c.get("text"),
@@ -330,7 +355,7 @@ def _to_posts(
             "reposts": 0,
             "platform": "bili",
             "topic": topic,
-            "source_url": video.get("url") or (f"https://www.bilibili.com/video/{bvid}" if bvid else None),
+            "source_url": source_url,
             "extra": {
                 "video_title": title,
                 "bvid": bvid,
@@ -360,10 +385,10 @@ def collect_bilibili(
     if not keyword and not video_ref:
         raise BilibiliCollectError("请填写关键词或视频 BV/链接")
 
-    topic_clean = (topic or "").strip()[:100] or (keyword[:40] if keyword else "B站评论")
+    topic_seed = resolve_collect_topic(topic=topic, keyword=keyword, video_titles=None)
     store = get_store()
     filename = f"bilibili:{keyword or video_ref}"[:120]
-    job = store.create_import_job(filename=filename, topic=topic_clean, platform="bili")
+    job = store.create_import_job(filename=filename, topic=topic_seed, platform="bili")
 
     client = _client()
     try:
@@ -381,6 +406,19 @@ def collect_bilibili(
             )
         else:
             targets = search_videos(client, keyword, max_videos=max_videos)
+
+        topic_clean = resolve_collect_topic(
+            topic=topic,
+            keyword=keyword,
+            video_titles=[str(t.get("title") or "") for t in targets],
+        )
+        if topic_clean != topic_seed:
+            with store.connect() as conn:
+                conn.execute(
+                    "UPDATE import_jobs SET topic = ? WHERE id = ?",
+                    (topic_clean, job["id"]),
+                )
+            job["topic"] = topic_clean
 
         all_posts: list[dict] = []
         video_summaries: list[dict[str, Any]] = []

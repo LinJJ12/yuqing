@@ -11,7 +11,7 @@ const routes = [
     path: '/monitor',
     name: 'monitor',
     component: () => import('../pages/MonitorPage.vue'),
-    meta: { title: '舆情监测', subtitle: '导入 JSON / CSV，浏览入库帖子' },
+    meta: { title: '舆情监测', subtitle: 'B 站评论采集 · 文件导入 · 浏览入库' },
   },
   {
     path: '/sentiment',

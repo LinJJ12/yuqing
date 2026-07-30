@@ -194,25 +194,47 @@ class Store:
                 inserted += max(cursor.rowcount, 0)
         return inserted
 
-    def count_posts(self) -> int:
+    def count_posts(
+        self,
+        *,
+        topic: str | None = None,
+        platform: str | None = None,
+    ) -> int:
+        clauses: list[str] = []
+        values: list[Any] = []
+        if topic and topic != "all":
+            clauses.append("topic = ?")
+            values.append(topic)
+        if platform and platform != "all":
+            clauses.append("platform = ?")
+            values.append(platform)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self.connect() as conn:
-            row = conn.execute("SELECT COUNT(*) AS c FROM posts").fetchone()
+            row = conn.execute(
+                f"SELECT COUNT(*) AS c FROM posts {where}",
+                values,
+            ).fetchone()
         return int(row["c"])
 
     def list_posts(
         self,
         *,
         topic: str | None = None,
+        platform: str | None = None,
         limit: int = 100,
         offset: int = 0,
         method: str | None = None,
         only_pending_bert: bool = False,
+        order: str = "fetched",
     ) -> list[dict]:
         clauses: list[str] = []
         values: list[Any] = []
         if topic and topic != "all":
             clauses.append("topic = ?")
             values.append(topic)
+        if platform and platform != "all":
+            clauses.append("platform = ?")
+            values.append(platform)
         if method:
             clauses.append("sentiment_method = ?")
             values.append(method)
@@ -221,11 +243,16 @@ class Store:
                 "(sentiment_method IS NULL OR sentiment_method != 'bert')"
             )
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        # 默认按入库时间，避免样例假发布时间压过真实采集
+        if order == "published":
+            order_sql = "COALESCE(published_at, fetched_at) DESC, id DESC"
+        else:
+            order_sql = "COALESCE(fetched_at, published_at) DESC, id DESC"
         values.extend([limit, offset])
         with self.connect() as conn:
             rows = conn.execute(
                 f"""SELECT * FROM posts {where}
-                    ORDER BY COALESCE(published_at, fetched_at) DESC
+                    ORDER BY {order_sql}
                     LIMIT ? OFFSET ?""",
                 values,
             ).fetchall()
@@ -404,25 +431,33 @@ class Store:
                 """SELECT COALESCE(sentiment_label, 'unknown') AS label, COUNT(*) AS c
                    FROM posts GROUP BY COALESCE(sentiment_label, 'unknown')"""
             ).fetchall()
+            by_platform = conn.execute(
+                """SELECT COALESCE(platform, 'unknown') AS platform, COUNT(*) AS c
+                   FROM posts GROUP BY COALESCE(platform, 'unknown')
+                   ORDER BY c DESC"""
+            ).fetchall()
             by_day = conn.execute(
-                """SELECT substr(COALESCE(published_at, fetched_at), 1, 10) AS day,
+                """SELECT substr(COALESCE(fetched_at, published_at), 1, 10) AS day,
                           COUNT(*) AS c
                    FROM posts
-                   WHERE COALESCE(published_at, fetched_at) IS NOT NULL
+                   WHERE COALESCE(fetched_at, published_at) IS NOT NULL
                    GROUP BY day
                    ORDER BY day DESC
                    LIMIT 14"""
             ).fetchall()
             recent = conn.execute(
                 """SELECT * FROM posts
-                   ORDER BY COALESCE(published_at, fetched_at) DESC
-                   LIMIT 8"""
+                   ORDER BY COALESCE(fetched_at, published_at) DESC, id DESC
+                   LIMIT 12"""
             ).fetchall()
         return {
             "total_posts": int(total),
             "by_topic": [{"topic": r["topic"], "count": int(r["c"])} for r in by_topic],
             "by_sentiment": [
                 {"label": r["label"], "count": int(r["c"])} for r in by_sentiment
+            ],
+            "by_platform": [
+                {"platform": r["platform"], "count": int(r["c"])} for r in by_platform
             ],
             "by_day": [
                 {"day": r["day"], "count": int(r["c"])} for r in reversed(list(by_day))

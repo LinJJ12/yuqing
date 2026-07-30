@@ -12,7 +12,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `settings.py` | `Settings`：端口、模型、Ollama、OpenAI 兼容 LLM、B 站 Cookie、校园关键词 |
+| `settings.py` | `Settings`：端口、模型、Ollama、OpenAI 兼容 LLM、B 站 Cookie、主题/预警关键词 |
 | `device.py` | `get_device_info` / `resolve_device` |
 
 ## 约定

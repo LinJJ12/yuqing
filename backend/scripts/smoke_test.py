@@ -34,13 +34,32 @@ def main() -> None:
     store = Store(str(db_path))
     store.initialize()
 
-    # 1) 规范化 + 三类情感词典
+    # 规范化 + 三类情感词典
     pos = normalize_post({"id": "1", "text": "食堂很好吃，非常满意推荐"})
     neg = normalize_post({"id": "2", "text": "宿舍热水故障，差评投诉"})
     neu = normalize_post({"id": "3", "text": "图书馆今天开到九点"})
     check("normalize positive", pos["sentiment_label"] == "positive", str(pos))
     check("normalize negative", neg["sentiment_label"] == "negative", str(neg))
     check("lexicon returns triple", lexicon_sentiment("一般情况")[1] in {"positive", "neutral", "negative"})
+    check("infer_topic fallback", normalize_post({"id": "4", "text": "今天天气不错"})["topic"] == "综合")
+
+    from src.services.bilibili_collect import resolve_collect_topic
+
+    check(
+        "collect topic bv title",
+        resolve_collect_topic(topic=None, keyword=None, video_titles=["一口气看完测试视频"])
+        == "一口气看完测试视频",
+    )
+    check(
+        "collect topic keyword wins",
+        resolve_collect_topic(topic=None, keyword="数码评测", video_titles=["某视频标题"])
+        == "数码评测",
+    )
+    check(
+        "collect topic explicit wins",
+        resolve_collect_topic(topic="口碑", keyword="数码评测", video_titles=["某视频"])
+        == "口碑",
+    )
 
     inserted = store.insert_posts("job1", [pos, neg, neu])
     check("insert posts", inserted == 3, str(inserted))
@@ -75,6 +94,24 @@ def main() -> None:
 
         r = client.get("/api/v1/trends")
         check("trends", r.status_code == 200 and isinstance(r.json()["data"]["series"], list))
+
+        # 趋势按 fetched_at 优先：样例旧 published_at 不应压过今日入库
+        from src.services.forecast import daily_volume_series
+        from src.services.normalize import normalize_post as _np
+
+        oldish = _np(
+            {
+                "id": "trend-old",
+                "text": "旧帖差评投诉",
+                "published_at": "2020-01-01T00:00:00+00:00",
+            }
+        )
+        oldish["fetched_at"] = "2026-07-30T12:00:00+00:00"
+        store.insert_posts("job-trend", [oldish])
+        trend = daily_volume_series(30, use_prophet=False)
+        days = {row["day"]: row["count"] for row in trend["series"] if not row.get("is_forecast")}
+        check("trend prefers fetched_at", days.get("2026-07-30", 0) >= 1, str(days))
+        check("trend ignores old published alone", days.get("2020-01-01", 0) == 0, str(days))
 
         r = client.get("/api/v1/reports/summary")
         check("reports", r.status_code == 200 and r.json()["ok"] is True)

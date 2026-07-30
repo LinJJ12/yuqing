@@ -1,6 +1,7 @@
 # 真实数据采集
 
 > 一期：文件导入。二期：外挂 MediaCrawler + **内嵌 B 站评论采集**。  
+> 产品定位：**不局限于校园**——以 B 站视频评论口碑 / 多平台舆情为主；`campus` 平台码仅为通用导入与历史样例。  
 > 系统内**不**内嵌小红书/抖音二维码登录台。演示前请先看 [`model-cache.md`](./model-cache.md)。
 
 ---
@@ -23,6 +24,14 @@
 | 路由 | `backend/src/api/collect.py` |
 | 配置 | `BILIBILI_SESSDATA`（`backend/.env`） |
 
+### 推荐用法
+
+| 目标 | 建议 |
+|------|------|
+| 分析**单个视频**口碑 | 填 **BV / 链接**（优先），不必填关键词 |
+| 按主题搜一批视频 | 填较具体的关键词（如 `数码评测`），少用过宽单字词 |
+| 自定义话题标签 | 填「话题」字段；否则见下方回退规则 |
+
 ### 请求示例
 
 ```http
@@ -30,14 +39,32 @@ POST /api/v1/collect/bilibili
 Content-Type: application/json
 
 {
-  "keyword": "校园食堂",
-  "max_videos": 2,
-  "max_comments_per_video": 40,
-  "topic": "食堂"
+  "video": "BV1xxxxxxxx",
+  "max_comments_per_video": 40
 }
 ```
 
-也可填 `video`（BV 号或 `https://www.bilibili.com/video/BV…`）；有 `video` 时优先按单视频拉评论。入库平台码为 `bili`，并记入 `import_jobs`。
+或按关键词搜索：
+
+```json
+{
+  "keyword": "数码评测",
+  "max_videos": 2,
+  "max_comments_per_video": 40,
+  "topic": "口碑"
+}
+```
+
+有 `video` 时优先按单视频拉评论。入库平台码为 `bili`，并记入 `import_jobs`。
+
+### 话题（topic）回退
+
+`resolve_collect_topic`（`bilibili_collect.py`）规则：
+
+1. 请求里显式 `topic`
+2. 否则用搜索 `keyword`（截断）
+3. 否则用解析到的**视频标题**（适合只填 BV）
+4. 再否则 `"B站评论"`
 
 ### Cookie（强烈建议）
 
@@ -55,10 +82,12 @@ BILIBILI_SESSDATA=...
 ```text
 关键词 / BV
   → search/all/v2（失败则 HTML 抽 BV）
-  → view 解析 aid
-  → reply/main 拉评论（含二级回复）
-  → normalize_post → SQLite（platform=bili）
+  → view 解析 aid + 标题
+  → reply 拉评论（含二级回复）
+  → resolve_collect_topic → normalize_post → SQLite（platform=bili）
 ```
+
+列表 / 总览 / 趋势默认按 **`fetched_at`（入库时间）** 优先，避免样例假发布时间主导曲线。
 
 ---
 
@@ -88,7 +117,7 @@ cd MediaCrawler
 | 项 | 建议 |
 |----|------|
 | `PLATFORM` | `xhs` / `dy` / `wb` 等 |
-| `KEYWORDS` | 校园相关词，如 `食堂,宿舍,校园网` |
+| `KEYWORDS` | 与场景相关的词，如 `评测,探店,开箱` |
 | `SAVE_DATA_OPTION` | `json` 或 `jsonl` |
 
 ### 2. 转换为 Yuqing 格式
@@ -119,7 +148,7 @@ uv run python backend/scripts/convert_mediacrawler.py backend/data/samples/media
 | `xhs` | 小红书（外挂） |
 | `dy` | 抖音（外挂） |
 | `wb` | 微博（外挂） |
-| `campus` | 校园样例 / 通用文件导入 |
+| `campus` | 通用文件导入 / 历史样例数据 |
 
 ---
 

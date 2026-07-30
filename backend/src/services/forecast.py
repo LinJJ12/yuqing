@@ -115,7 +115,8 @@ def daily_volume_series(
     posts = get_store().list_posts(limit=5000)
     buckets: dict[str, int] = defaultdict(int)
     for post in posts:
-        day = (post.get("published_at") or post.get("fetched_at") or "")[:10]
+        # 与总览 by_day / 列表默认排序一致：优先入库时间，避免样例假发布时间主导趋势
+        day = (post.get("fetched_at") or post.get("published_at") or "")[:10]
         if day:
             buckets[day] += 1
     days = sorted(buckets.keys())[-limit_days:]
@@ -165,7 +166,7 @@ def detect_alerts() -> list[dict[str, Any]]:
                 "topic": post.get("topic"),
                 "sentiment_label": label,
                 "keywords": hit,
-                "created_at": post.get("published_at") or post.get("fetched_at"),
+                "created_at": post.get("fetched_at") or post.get("published_at"),
                 "post_id": post["id"],
             }
         )
@@ -210,7 +211,7 @@ def build_report_summary(*, with_prophet: bool = True) -> dict[str, Any]:
     trend_pack = daily_volume_series(14, use_prophet=with_prophet)
     alerts = detect_alerts()
     return {
-        "generated_for": "校园舆情日报（自动）",
+        "generated_for": "舆情日报（自动）",
         "school_keywords": settings.default_school_keywords,
         "alert_keywords": get_alert_keywords(),
         "overview": overview,

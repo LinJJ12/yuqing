@@ -18,7 +18,7 @@ const error = ref('')
 const stats = ref(null)
 const sample = ref([])
 const jobs = ref([])
-const previewText = ref('三食堂排队太久，窗口太少，希望后勤尽快处理。')
+const previewText = ref('这期剪辑节奏不错，但中段广告有点长，希望能改进。')
 const previewResult = ref(null)
 const chartRef = ref(null)
 let chart
@@ -101,20 +101,25 @@ function renderChart() {
     if (row.label in bucket) bucket[row.label] += row.count
   }
   chart.setOption({
-    color: ['#1e40af', '#93c5fd'],
+    color: ['#0f766e', '#99f6e4'],
     tooltip: { trigger: 'axis' },
-    legend: { data: ['模型分析', '词典快筛'], textStyle: { color: '#475569' } },
-    grid: { left: 40, right: 20, top: 40, bottom: 30 },
+    legend: {
+      data: ['模型分析', '词典快筛'],
+      top: 0,
+      left: 'center',
+      textStyle: { color: '#475569' },
+    },
+    grid: { left: 48, right: 20, top: 48, bottom: 40 },
     xAxis: {
       type: 'category',
       data: ['正面', '中性', '负面'],
-      axisLine: { lineStyle: { color: '#bfdbfe' } },
-      axisLabel: { color: '#64748b' },
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
+      axisLabel: { color: '#64748b', margin: 12 },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      splitLine: { lineStyle: { color: '#e9eef6' } },
+      splitLine: { lineStyle: { color: '#eef2f7' } },
       axisLabel: { color: '#64748b' },
     },
     series: [
@@ -123,14 +128,14 @@ function renderChart() {
         type: 'bar',
         barMaxWidth: 28,
         data: [bert.positive, bert.neutral, bert.negative],
-        itemStyle: { color: '#1e40af', borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: '#0f766e', borderRadius: [6, 6, 0, 0] },
       },
       {
         name: '词典快筛',
         type: 'bar',
         barMaxWidth: 28,
         data: [lexicon.positive, lexicon.neutral, lexicon.negative],
-        itemStyle: { color: '#93c5fd', borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: '#99f6e4', borderRadius: [6, 6, 0, 0] },
       },
     ],
   })

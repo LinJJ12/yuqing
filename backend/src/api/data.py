@@ -82,11 +82,29 @@ def get_import(job_id: str):
 @router.get("/posts")
 def list_posts(
     topic: str | None = None,
+    platform: str | None = None,
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    order: str = Query(default="fetched", pattern="^(fetched|published)$"),
 ):
-    posts = get_store().list_posts(topic=topic, limit=limit, offset=offset)
-    return ok({"items": posts, "count": len(posts), "total": get_store().count_posts()})
+    store = get_store()
+    posts = store.list_posts(
+        topic=topic,
+        platform=platform,
+        limit=limit,
+        offset=offset,
+        order=order,
+    )
+    total = store.count_posts(topic=topic, platform=platform)
+    return ok(
+        {
+            "items": posts,
+            "count": len(posts),
+            "total": total,
+            "platform": platform or "all",
+            "order": order,
+        }
+    )
 
 
 @router.get("/dashboard/overview")

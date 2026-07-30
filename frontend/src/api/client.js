@@ -57,9 +57,15 @@ export async function fetchOverview() {
   return data
 }
 
-export async function fetchPosts({ topic, limit = 50, offset = 0 } = {}) {
+export async function fetchPosts({
+  topic,
+  platform,
+  limit = 50,
+  offset = 0,
+  order = 'fetched',
+} = {}) {
   const { data } = await withFallback(api, 'get', '/posts', {
-    params: { topic, limit, offset },
+    params: { topic, platform, limit, offset, order },
   })
   return data
 }

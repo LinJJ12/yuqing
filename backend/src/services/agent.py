@@ -71,7 +71,7 @@ def build_opinion_context(limit_posts: int = 8) -> dict[str, Any]:
 
 def _context_prompt(ctx: dict[str, Any]) -> str:
     return (
-        "以下是校园舆情系统当前库内统计与样例（只读，请基于此回答，勿编造库外事实）：\n"
+        "以下是舆情系统当前库内统计与样例（只读，请基于此回答，勿编造库外事实）：\n"
         + json.dumps(ctx, ensure_ascii=False, indent=2)
     )
 
@@ -112,30 +112,39 @@ def _chat_completion(
     try:
         from openai import OpenAI
 
+        # 本机 Ollama 勿走系统代理，否则易被 Clash 等回 503
+        http_client = None
+        if provider["name"] == "ollama":
+            http_client = httpx.Client(timeout=90.0, trust_env=False)
         client = OpenAI(
             api_key=provider["api_key"],
             base_url=provider["base_url"],
             timeout=90.0,
+            http_client=http_client,
         )
-        resp = client.chat.completions.create(
-            model=provider["model"],
-            messages=messages,
-            temperature=0.4,
-            max_tokens=max_tokens,
-        )
-        text = (resp.choices[0].message.content or "").strip()
-        if not text:
-            raise RuntimeError("模型返回空内容")
-        return {
-            "provider": provider["name"],
-            "model": provider["model"],
-            "content": text,
-        }
+        try:
+            resp = client.chat.completions.create(
+                model=provider["model"],
+                messages=messages,
+                temperature=0.4,
+                max_tokens=max_tokens,
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            if not text:
+                raise RuntimeError("模型返回空内容")
+            return {
+                "provider": provider["name"],
+                "model": provider["model"],
+                "content": text,
+            }
+        finally:
+            if http_client is not None:
+                http_client.close()
     except Exception as exc:
         if provider["name"] == "openai-compatible":
             raise AgentUnavailableError(f"云端 LLM 调用失败: {exc}") from exc
         try:
-            with httpx.Client(timeout=2.5) as http:
+            with httpx.Client(timeout=2.5, trust_env=False) as http:
                 http.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags").raise_for_status()
         except Exception:
             raise AgentUnavailableError(
@@ -160,7 +169,7 @@ def agent_chat(
         raise ValueError("问题不能为空")
     ctx = build_opinion_context()
     system = (
-        "你是校园舆情分析助手。根据提供的统计与样例回答用户问题，"
+        "你是社交媒体舆情与观众反馈分析助手。根据提供的统计与样例回答用户问题，"
         "语气客观简洁，可给 1～3 条可执行建议。若数据不足请明确说明。"
     )
     user = _context_prompt(ctx) + f"\n\n用户问题：{q}"
@@ -180,7 +189,7 @@ def agent_brief() -> dict[str, Any]:
     ctx = build_opinion_context(limit_posts=10)
     summary = build_report_summary(with_prophet=False)
     system = (
-        "你是校园舆情简报作者。请写一篇 250～450 字的中文简报，"
+        "你是舆情简报作者。请写一篇 250～450 字的中文简报，"
         "结构包含：总体态势、主要话题、风险与预警、建议措施。"
         "只基于给定数据，不要编造具体人名或未出现的事件。"
     )
@@ -200,7 +209,7 @@ def agent_brief() -> dict[str, Any]:
     result = _chat_completion(system=system, user=user, history=None, max_tokens=1400)
     return {
         **result,
-        "title": "校园舆情简报（Agent）",
+        "title": "舆情简报（Agent）",
         "context_digest": {
             "total_posts": ctx["overview"].get("total_posts"),
             "alerts_total": ctx["alerts"].get("total"),
@@ -213,7 +222,7 @@ def agent_status() -> dict[str, Any]:
     has_cloud = settings.has_cloud_llm
     ollama_ok = False
     try:
-        with httpx.Client(timeout=2.0) as http:
+        with httpx.Client(timeout=2.0, trust_env=False) as http:
             r = http.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags")
             r.raise_for_status()
             ollama_ok = True

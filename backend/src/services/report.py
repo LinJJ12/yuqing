@@ -68,7 +68,7 @@ def build_csv_bytes(summary: dict[str, Any] | None = None) -> bytes:
     data = summary or build_report_summary()
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["校园舆情报告导出"])
+    writer.writerow(["舆情报告导出"])
     writer.writerow(["生成时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
     writer.writerow([])
     writer.writerow(["指标", "数值"])
@@ -169,7 +169,7 @@ def build_pdf_bytes(summary: dict[str, Any] | None = None) -> bytes:
     )
 
     story: list[Any] = []
-    story.append(Paragraph(_xml(data.get("generated_for") or "校园舆情报告"), title_style))
+    story.append(Paragraph(_xml(data.get("generated_for") or "舆情报告"), title_style))
     story.append(
         Paragraph(
             f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -260,7 +260,7 @@ def generate_ai_summary(summary: dict[str, Any] | None = None) -> dict[str, Any]
     alerts = data.get("alerts") or {}
     topics = overview.get("by_topic") or []
     prompt = (
-        "你是校园舆情分析助手。根据以下统计写一段 150～250 字中文摘要，"
+        "你是舆情分析助手。根据以下统计写一段 150～250 字中文摘要，"
         "包含总体态势、主要话题、风险点与建议，语气客观。\n\n"
         f"帖子总量：{overview.get('total_posts', 0)}\n"
         f"情感已分析：{sentiment.get('bert_done', 0)}\n"

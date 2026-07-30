@@ -11,12 +11,15 @@ defineProps({
 const emit = defineEmits(['refresh'])
 
 const route = useRoute()
-const title = computed(() => route.meta.title || '校园舆情')
+const title = computed(() => route.meta.title || '舆情分析')
 </script>
 
 <template>
   <header class="topbar">
-    <h1 class="title">{{ title }}</h1>
+    <div class="title-wrap">
+      <p class="eyebrow">Yuqing Workspace</p>
+      <h1 class="title">{{ title }}</h1>
+    </div>
     <div class="actions">
       <span
         class="pill"
@@ -51,16 +54,28 @@ const title = computed(() => route.meta.title || '校园舆情')
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0 1.5rem;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--bg-secondary);
+  padding: 0 1.6rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+}
+.title-wrap {
+  min-width: 0;
+}
+.eyebrow {
+  margin: 0 0 0.1rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 .title {
   margin: 0;
   min-width: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;

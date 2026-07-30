@@ -1,8 +1,8 @@
-# yuqing — 校园舆情（Python + Vue + GPU）
+# yuqing — 社交媒体舆情 / 观众反馈分析（Python + Vue + GPU）
 
 统一环境 + 合并工程。目录约定见 [`docs/directory-structure.md`](docs/directory-structure.md)，流程与架构图见 [`docs/diagrams.md`](docs/diagrams.md)，方案见 [`.trellis/MERGE_PLAN.md`](.trellis/MERGE_PLAN.md)。
 
-结构对齐桌面 **chatbot / OmniStream**：`frontend/` + `backend/` 并列，参考仓在 `vendor/`。
+结构对齐桌面 **chatbot / OmniStream**：`frontend/` + `backend/` 并列，参考仓在 `vendor/`。不局限于校园场景：以 B 站视频评论口碑分析为主，文件导入与校园样例仍可用。
 
 ## 分析栈
 
@@ -38,12 +38,16 @@ npm run dev
 # http://127.0.0.1:5173
 ```
 
-### 样例数据
+### 样例数据（可选）
+
+校园主题演示包仍可用，不代表产品限定校园：
 
 ```powershell
 uv run python backend/scripts/generate_sample_data.py
-# 监测页上传 backend/data/samples/campus_sample.json
+# 监测页上传 backend/data/samples/campus_sample.json（平台码 campus = 样例/导入）
 ```
+
+日常演示更推荐：监测页贴 **BV** 采集真实 B 站评论，再跑情感 / 主题 / 报告。
 
 ### 演示前（防翻车）
 

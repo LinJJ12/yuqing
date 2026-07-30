@@ -67,7 +67,8 @@ def _probe_ollama() -> dict[str, Any]:
             "hint": "BERTopic 将走 HuggingFace 嵌入，首次也可能需下载。",
         }
     try:
-        with httpx.Client(timeout=2.5) as client:
+        # trust_env=False：避免 Windows 系统代理劫持本机 Ollama
+        with httpx.Client(timeout=2.5, trust_env=False) as client:
             tags = client.get(f"{base}/api/tags")
             tags.raise_for_status()
             names = [m.get("name", "") for m in (tags.json().get("models") or [])]

@@ -26,19 +26,21 @@ function renderTrend(series, prophetMeta) {
     tooltip: { trigger: 'axis' },
     legend: {
       data: ['发帖量', '滑动平均', ...(hasProphet ? ['Prophet预测'] : [])],
+      top: 0,
+      left: 'center',
       textStyle: { color: '#475569' },
     },
-    grid: { left: 40, right: 20, top: 40, bottom: 30 },
+    grid: { left: 48, right: 20, top: 48, bottom: 40 },
     xAxis: {
       type: 'category',
       data: series.map((s) => s.day),
-      axisLine: { lineStyle: { color: '#bfdbfe' } },
-      axisLabel: { color: '#64748b' },
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
+      axisLabel: { color: '#64748b', margin: 12 },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      splitLine: { lineStyle: { color: '#e9eef6' } },
+      splitLine: { lineStyle: { color: '#eef2f7' } },
       axisLabel: { color: '#64748b' },
     },
     series: [
@@ -47,14 +49,14 @@ function renderTrend(series, prophetMeta) {
         type: 'bar',
         barMaxWidth: 22,
         data: series.map((s) => (s.is_forecast ? null : s.count)),
-        itemStyle: { color: '#93c5fd', borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: '#99f6e4', borderRadius: [4, 4, 0, 0] },
       },
       {
         name: '滑动平均',
         type: 'line',
         smooth: true,
         data: series.map((s) => (s.is_forecast ? null : s.rolling_mean)),
-        itemStyle: { color: '#1e40af' },
+        itemStyle: { color: '#0f766e' },
         lineStyle: { width: 2.5 },
       },
       ...(hasProphet
@@ -64,7 +66,7 @@ function renderTrend(series, prophetMeta) {
               type: 'line',
               smooth: true,
               data: series.map((s) => s.prophet_yhat),
-              itemStyle: { color: '#f59e0b' },
+              itemStyle: { color: '#ea580c' },
               lineStyle: { width: 2, type: 'dashed' },
             },
           ]

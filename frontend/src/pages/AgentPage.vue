@@ -123,7 +123,7 @@ onMounted(async () => {
       <div class="panel-head">
         <h3>舆情问答</h3>
       </div>
-      <textarea v-model="question" class="textarea" rows="3" placeholder="例如：食堂相关负面主要集中在哪里？" />
+      <textarea v-model="question" class="textarea" rows="3" placeholder="例如：该视频评论负面主要集中在哪些点？" />
       <div class="actions">
         <button
           type="button"

@@ -39,8 +39,8 @@ function isActive(item) {
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">舆</div>
       <div v-show="!collapsed" class="brand-text">
-        <strong>校园舆情</strong>
-        <small>Yuqing</small>
+        <strong>Yuqing</strong>
+        <small>观众反馈分析</small>
       </div>
     </div>
 
@@ -53,8 +53,7 @@ function isActive(item) {
         :class="{ active: isActive(item) }"
         :title="collapsed ? item.label : undefined"
       >
-        <span v-if="isActive(item)" class="active-bar" aria-hidden="true" />
-        <component :is="item.icon" :size="18" :stroke-width="1.75" class="nav-icon" />
+        <component :is="item.icon" :size="18" :stroke-width="1.85" class="nav-icon" />
         <span v-show="!collapsed" class="nav-label">{{ item.label }}</span>
       </RouterLink>
     </nav>
@@ -81,8 +80,10 @@ function isActive(item) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border-right: 1px solid var(--color-border);
-  background: var(--bg-secondary);
+  border-right: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.03);
 }
 .sidebar.collapsed {
   width: var(--sidebar-w-collapsed);
@@ -91,80 +92,74 @@ function isActive(item) {
   height: var(--topbar-h);
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.7rem;
   padding: 0 1rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
   overflow: hidden;
 }
 .brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
   color: #fff;
-  font-weight: 700;
-  font-size: 0.85rem;
+  font-weight: 800;
+  font-size: 0.9rem;
   line-height: 1;
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  background: linear-gradient(145deg, #14b8a6 0%, #0f766e 70%);
+  box-shadow: 0 6px 14px rgba(15, 118, 110, 0.28);
 }
 .brand-text {
   min-width: 0;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .brand-text strong {
   display: block;
-  font-size: 0.92rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 .brand-text small {
   display: block;
   color: var(--text-tertiary);
-  font-size: 0.7rem;
-  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .nav {
   flex: 1;
   min-height: 0;
-  padding: 0.65rem 0.5rem;
+  padding: 0.85rem 0.7rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .nav-item {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  height: 40px;
-  padding: 0 0.75rem 0 0.85rem;
-  border-radius: var(--radius-md);
+  gap: 0.65rem;
+  height: 42px;
+  padding: 0 0.85rem;
+  border-radius: 12px;
   color: var(--text-secondary);
   text-decoration: none;
-  transition: background 150ms, color 150ms;
+  transition: background 150ms, color 150ms, box-shadow 150ms, transform 150ms;
   cursor: pointer;
 }
 .nav-item:hover {
-  background: var(--bg-tertiary);
+  background: rgba(15, 118, 110, 0.06);
   color: var(--text-primary);
 }
 .nav-item.active {
-  background: rgba(30, 64, 175, 0.08);
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.16), rgba(15, 118, 110, 0.1));
   color: var(--color-primary);
-  font-weight: 600;
-}
-.active-bar {
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--color-primary);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.12);
 }
 .nav-icon {
   flex-shrink: 0;
@@ -177,21 +172,20 @@ function isActive(item) {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1;
+  font-size: 0.9rem;
 }
 .sidebar.collapsed .nav-item {
   justify-content: center;
   padding: 0;
 }
-.sidebar.collapsed .active-bar {
-  display: none;
-}
 .sidebar-foot {
-  padding: 0.5rem;
-  border-top: 1px solid var(--color-border);
+  padding: 0.65rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
 }
 .collapse-btn {
   width: 100%;
   justify-content: center;
+  border-radius: 10px;
 }
 
 @media (max-width: 800px) {

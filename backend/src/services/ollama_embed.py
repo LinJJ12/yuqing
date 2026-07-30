@@ -90,7 +90,8 @@ class OllamaEmbedder:
 
     def _post_json(self, path: str, body: dict) -> dict:
         url = f"{self.base_url}{path}"
-        with httpx.Client(timeout=self.timeout) as client:
+        # trust_env=False：避免 Windows 系统代理劫持 127.0.0.1（常见 503）
+        with httpx.Client(timeout=self.timeout, trust_env=False) as client:
             resp = client.post(url, json=body)
             resp.raise_for_status()
             return resp.json()

@@ -5,6 +5,7 @@ import {
   Tags,
   ThumbsUp,
   ThumbsDown,
+  ExternalLink,
 } from '@lucide/vue'
 import { fetchOverview } from '../api/client'
 
@@ -26,6 +27,14 @@ const sentimentPill = {
   unknown: 'pill-warning',
 }
 
+const platformMap = {
+  bili: 'B站',
+  campus: '样例/导入',
+  xhs: '小红书',
+  dy: '抖音',
+  wb: '微博',
+}
+
 const total = computed(() => overview.value?.total_posts ?? 0)
 const topicCount = computed(() => overview.value?.by_topic?.length ?? 0)
 
@@ -36,6 +45,14 @@ function sentimentCount(label) {
 
 const positiveCount = computed(() => sentimentCount('positive'))
 const negativeCount = computed(() => sentimentCount('negative'))
+
+function platformLabel(code) {
+  return platformMap[code] || code || '—'
+}
+
+function videoTitle(post) {
+  return post?.raw?.extra?.video_title || ''
+}
 
 onMounted(async () => {
   try {
@@ -92,15 +109,15 @@ onMounted(async () => {
       <div class="cols-2">
         <section class="panel">
           <div class="panel-head">
-            <h3>话题分布</h3>
+            <h3>数据来源（平台）</h3>
           </div>
-          <ul v-if="overview.by_topic?.length" class="stack-list">
-            <li v-for="item in overview.by_topic" :key="item.topic">
-              <span>{{ item.topic }}</span>
+          <ul v-if="overview.by_platform?.length" class="stack-list">
+            <li v-for="item in overview.by_platform" :key="item.platform">
+              <span>{{ platformLabel(item.platform) }}</span>
               <b>{{ item.count }}</b>
             </li>
           </ul>
-          <p v-else class="muted">暂无数据，请到「监测」页导入样例。</p>
+          <p v-else class="muted">暂无数据</p>
         </section>
 
         <section class="panel">
@@ -119,7 +136,21 @@ onMounted(async () => {
 
       <section class="panel">
         <div class="panel-head">
-          <h3>最近帖子</h3>
+          <h3>话题分布</h3>
+        </div>
+        <ul v-if="overview.by_topic?.length" class="stack-list">
+          <li v-for="item in overview.by_topic" :key="item.topic">
+            <span>{{ item.topic }}</span>
+            <b>{{ item.count }}</b>
+          </li>
+        </ul>
+        <p v-else class="muted">暂无数据，请到「监测」页采集或导入。</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h3>最近入库</h3>
+          <span class="pill pill-default">按采集/导入时间</span>
         </div>
         <div v-if="overview.recent_posts?.length" class="post-list">
           <article
@@ -129,6 +160,7 @@ onMounted(async () => {
           >
             <header class="post-meta">
               <b>{{ post.topic || '未分类' }}</b>
+              <span class="pill pill-default">{{ platformLabel(post.platform) }}</span>
               <span
                 class="pill"
                 :class="sentimentPill[post.sentiment_label] || 'pill-default'"
@@ -139,13 +171,22 @@ onMounted(async () => {
                   '—'
                 }}
               </span>
-              <em>{{ post.published_at || post.fetched_at }}</em>
+              <em>{{ post.fetched_at || post.published_at }}</em>
             </header>
+            <p v-if="videoTitle(post)" class="muted" style="margin: 0 0 0.25rem; font-size: 0.8rem">
+              {{ videoTitle(post) }}
+            </p>
             <p>{{ post.text }}</p>
+            <p v-if="post.source_url" style="margin: 0.4rem 0 0">
+              <a :href="post.source_url" target="_blank" rel="noopener noreferrer">
+                <ExternalLink :size="14" style="vertical-align: -2px; margin-right: 0.2rem" />
+                打开原帖
+              </a>
+            </p>
           </article>
         </div>
         <p v-else class="muted">
-          还没有帖子。请打开「监测」上传样例数据。
+          还没有帖子。请打开「监测」采集 B 站评论或上传样例。
         </p>
       </section>
     </template>

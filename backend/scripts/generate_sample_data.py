@@ -1,4 +1,4 @@
-"""生成校园舆情样例数据并写入 backend/data/samples。"""
+"""生成可选样例数据（校园主题演示包）并写入 backend/data/samples。"""
 
 from __future__ import annotations
 

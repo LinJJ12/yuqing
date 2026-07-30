@@ -25,7 +25,7 @@ from src.config.settings import settings
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Yuqing campus opinion API")
+    parser = argparse.ArgumentParser(description="Yuqing opinion / audience-feedback API")
     parser.add_argument("--host", default=settings.host)
     parser.add_argument("--port", type=int, default=settings.port)
     parser.add_argument("--reload", action="store_true")

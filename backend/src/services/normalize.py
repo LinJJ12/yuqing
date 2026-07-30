@@ -1,6 +1,6 @@
 """将原始记录规范化为统一帖子结构。
 
-兼容校园样例 JSON，以及 MediaCrawler 导出字段（小红书 / 抖音 / 微博等）。
+兼容样例 JSON，以及 MediaCrawler 导出字段（小红书 / 抖音 / 微博等）。
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 from src.config.settings import settings
 from src.storage.db import utc_now
 
-# 简易校园情感词典（导入期占位；正式分析走 BERT）
+# 简易情感词典（导入期占位；正式分析走 BERT）
 _POS = ("好评", "满意", "感谢", "方便", "干净", "好吃", "给力", "优秀", "喜欢", "推荐")
 _NEG = ("差评", "投诉", "难吃", "脏乱", "故障", "不满", "排队久", "离谱", "失望", "恶心")
 
@@ -129,7 +129,7 @@ def _extract_text(record: dict) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def infer_topic(text: str, fallback: str = "校园综合") -> str:
+def infer_topic(text: str, fallback: str = "综合") -> str:
     for kw in settings.default_school_keywords:
         if kw in text:
             return kw

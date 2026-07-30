@@ -49,7 +49,8 @@ class Settings(BaseSettings):
     db_path: str = str(DATA_DIR / "yuqing.db")
     import_dir: str = str(DATA_DIR / "imports")
     max_upload_bytes: int = 10 * 1024 * 1024
-    default_platform: str = "campus"
+    default_platform: str = "campus"  # 文件导入默认平台码（历史兼容，非产品定位）
+    # 可选主题词典（样例/无显式 topic 时用）；校园场景仍可用，不限制采集范围
     default_school_keywords: list[str] = [
         "食堂",
         "宿舍",
