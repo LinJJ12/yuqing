@@ -12,6 +12,7 @@ import {
   Settings,
   PanelLeftClose,
 } from '@lucide/vue'
+import logoUrl from '../../assets/logo.png'
 
 const SIDEBAR_KEY = 'zhiwei.sidebar.collapsed'
 
@@ -73,7 +74,7 @@ function isActive(item) {
   <aside class="sidebar" :class="{ collapsed }">
     <div class="brand">
       <div v-show="!collapsed" class="brand-main">
-        <div class="brand-mark" aria-hidden="true">知</div>
+        <img class="brand-logo" :src="logoUrl" alt="知微" />
         <div class="brand-text">
           <strong>知微</strong>
           <small>舆情工作台</small>
@@ -87,7 +88,7 @@ function isActive(item) {
         @click="collapsed = !collapsed"
       >
         <PanelLeftClose v-if="!collapsed" :size="16" :stroke-width="1.75" />
-        <span v-else class="brand-mark brand-mark-sm" aria-hidden="true">知</span>
+        <img v-else class="brand-logo brand-logo-sm" :src="logoUrl" alt="知微" />
       </button>
     </div>
 
@@ -142,23 +143,18 @@ function isActive(item) {
   min-width: 0;
   overflow: hidden;
 }
-.brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
+.brand-logo {
+  height: 40px;
+  width: auto;
+  max-width: 118px;
   flex-shrink: 0;
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.8rem;
-  line-height: 1;
-  background: linear-gradient(145deg, #14b8a6 0%, #0f766e 80%);
+  object-fit: contain;
+  display: block;
 }
-.brand-mark-sm {
-  width: 28px;
-  height: 28px;
-  font-size: 0.8rem;
+.brand-logo-sm {
+  height: 30px;
+  width: auto;
+  max-width: 36px;
 }
 .brand-text {
   min-width: 0;
@@ -199,7 +195,7 @@ function isActive(item) {
   justify-content: center;
   padding: 0;
 }
-.sidebar.collapsed .collapse-btn:hover .brand-mark-sm {
+.sidebar.collapsed .collapse-btn:hover .brand-logo-sm {
   filter: brightness(1.05);
 }
 

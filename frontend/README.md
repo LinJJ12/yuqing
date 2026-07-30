@@ -9,12 +9,15 @@
 
 ```text
 frontend/
+├── public/
+│   └── logo.png      # favicon / 公开直链（透明底品牌图）
 ├── src/
 │   ├── api/          # 唯一 HTTP 出口
 │   ├── pages/        # 路由页面
 │   ├── router/
-│   ├── components/   # 共享组件（按需）
+│   ├── components/   # 共享组件（侧栏引用品牌 Logo）
 │   ├── assets/
+│   │   └── logo.png  # 侧栏等组件 import 用品牌图
 │   ├── style.css     # 全局样式（Vite 惯例）
 │   ├── App.vue
 │   └── main.js
@@ -22,6 +25,7 @@ frontend/
 └── package.json
 ```
 
+品牌图：`src/assets/logo.png`（组件引用）与 `public/logo.png`（浏览器图标 / README）保持同图；白底已抠除为透明 PNG。
 ## 启动
 
 ```powershell

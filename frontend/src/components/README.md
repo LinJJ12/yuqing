@@ -11,7 +11,7 @@
 
 | 路径 | 说明 |
 |------|------|
-| `layout/AppSidebar.vue` | 品牌「知微」、主导航、顶部收起 |
+| `layout/AppSidebar.vue` | 品牌 Logo「知微」、主导航、顶部收起 |
 | `layout/AppTopBar.vue` | 面包屑、后端连接状态、刷新 |
 | `PageHeader.vue` | 页面标题 + 副标题 + actions 插槽 |
 

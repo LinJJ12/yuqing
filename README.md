@@ -1,5 +1,9 @@
 # 知微 — 社交媒体舆情 / 观众反馈分析（Python + Vue + GPU）
 
+<p align="center">
+  <img src="frontend/public/logo.png" alt="知微" width="160" />
+</p>
+
 **知微**（仓库目录名可为 `yuqing`）：统一环境 + 合并工程。目录约定见 [`docs/directory-structure.md`](docs/directory-structure.md)，流程与架构图见 [`docs/diagrams.md`](docs/diagrams.md)，方案见 [`.trellis/MERGE_PLAN.md`](.trellis/MERGE_PLAN.md)。
 
 结构对齐桌面 **chatbot / OmniStream**：`frontend/` + `backend/` 并列，参考仓在 `vendor/`。不局限于校园场景：以 B 站视频评论口碑分析为主，文件导入与校园样例仍可用。

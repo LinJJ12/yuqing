@@ -77,7 +77,8 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | `frontend/src/pages/` | 路由级页面 | 直接拼后端 URL、持有密钥 |
 | `frontend/src/router/` | 路由表 | 业务请求 |
 | `frontend/src/components/` | 可复用 UI 块（含 `layout/`） | 绕过 api 层发请求 |
-| `frontend/src/assets/` | 静态资源 | 业务逻辑 |
+| `frontend/src/assets/` | 静态资源（含品牌 `logo.png`，侧栏 import） | 业务逻辑 |
+| `frontend/public/` | 公开静态（`logo.png` 作 favicon / 直链） | 业务逻辑 |
 | `frontend/src/style.css` | 全局样式（Vite 惯例，由 `main.js` 引入） | — |
 
 细则：[`frontend/src/README.md`](../frontend/src/README.md)。
