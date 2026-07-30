@@ -32,7 +32,7 @@
 趋势:  日聚合 + 滑动平均；可选 Prophet
 传播:  不做 SIR → 增长率 / 峰值检测
 报告:  PDF/CSV；可选 OpenAI 兼容摘要
-采集:  文件导入优先；MediaCrawler 二期
+采集:  文件导入；内嵌 B 站评论；外挂 MediaCrawler
 ```
 
 ### 1.2 仓库布局
@@ -134,6 +134,7 @@ PDF/CSV 导出、可选 OpenAI 兼容摘要、Prophet、异步 analysis-jobs、�
 
 ### Phase F — 增强
 - [x] 外挂 MediaCrawler 转换导入 + 监测平台选择（见 `docs/real-data-collection.md`）
+- [x] 内嵌 B 站评论采集（`/collect/bilibili`，可选 `BILIBILI_SESSDATA`）
 - [x] 轻量 Agent（问答 + 简报）
 - [ ] 词典 vs BERT 对比实验表、Redis+RQ  
 

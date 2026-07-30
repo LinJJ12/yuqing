@@ -5,7 +5,7 @@
 ```text
 api/  →  services/*  →  storage / config
 设备与模型配置只出自 config/
-情感 / 主题 / 导入 / 预警在 services/
+情感 / 主题 / 导入 / B 站采集 / 预警 / Agent 在 services/
 SQLite 只经 storage/
 lib/ 仅放无业务词工具（如 http 响应封装）
 ```

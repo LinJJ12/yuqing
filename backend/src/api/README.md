@@ -18,12 +18,14 @@
 | `alerts.py` | `/alerts` `/trends` `/reports/*` `/settings/alert-keywords` |
 | `analysis.py` | `/analysis/*` `/analysis-jobs` |
 | `agent.py` | `/agent/status` `/agent/chat` `/agent/brief` |
+| `collect.py` | `/collect/bilibili` |
 
 ## 下一层怎么选
 
 | 请求类型 | 下一层 |
 |----------|--------|
 | 导入 / 列表 / 总览读写 | `storage/`（经 `services/ingest` 做规范化） |
+| B 站评论采集 | `services/bilibili_collect` |
 | 情感 / 主题推理 | `services/sentiment` · `services/topics` |
 | 预警 / 趋势 / 报告汇总 | `services/forecast` |
 | CUDA / 模型名 / 端口 | `config/` |

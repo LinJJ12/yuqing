@@ -14,7 +14,7 @@
 | `directory-structure.md` | **主规范**：顶层职责、分层、API 对照表 |
 | `diagrams.md` | **流程 · 思维导图 · 架构图**（Mermaid） |
 | `model-cache.md` | **演示就绪**：模型预取、Ollama、OpenAI 兼容 LLM、检查清单 |
-| `real-data-collection.md` | **真实采集**：外挂 MediaCrawler → 转换 → 导入 |
+| `real-data-collection.md` | **真实采集**：内嵌 B 站评论 + 外挂 MediaCrawler |
 | `README.md` | 本说明 |
 
 ## 禁止

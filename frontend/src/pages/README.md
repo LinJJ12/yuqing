@@ -12,7 +12,7 @@
 | 文件 | 路由 |
 |------|------|
 | `OverviewPage.vue` | `/` |
-| `MonitorPage.vue` | `/monitor` |
+| `MonitorPage.vue` | `/monitor`（文件导入 + B 站采集） |
 | `SentimentPage.vue` | `/sentiment` |
 | `TopicsPage.vue` | `/topics` |
 | `AlertsPage.vue` | `/alerts` |

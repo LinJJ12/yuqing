@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     # Agent：无云端 Key 时回退 Ollama Chat
     ollama_chat_model: str = "qwen2.5"
 
+    # B 站内嵌采集（可选 Cookie，提高搜索/评论成功率）
+    bilibili_sessdata: str = ""
+
     @property
     def llm_api_key(self) -> str:
         return (self.openai_api_key or "").strip()

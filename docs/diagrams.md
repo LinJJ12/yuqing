@@ -1,8 +1,8 @@
 # Yuqing：流程 · 思维导图 · 架构图
 
-> **Yuqing** 是校园舆情监测工作台：文件导入帖子 → 本地 GPU 情感 / 主题分析 → 趋势预警 → 报告导出。  
+> **Yuqing** 是校园舆情监测工作台：文件导入 / B 站评论采集 → 本地 GPU 情感 / 主题分析 → 趋势预警 → 报告导出。  
 > **一期已结项：** Vue 3 工作台 + FastAPI BFF + SQLite；**无登录**；采集为文件导入。  
-> **二期已落地（外挂）：** MediaCrawler 导出 → 转换脚本 → 监测页导入；轻量 Agent（问答 + 简报）。  
+> **二期已落地：** 外挂 MediaCrawler 转换导入；**内嵌 B 站评论采集**；轻量 Agent（问答 + 简报）。  
 > 下图均为 Mermaid，可在支持 Mermaid 的编辑器中预览。目录细则见 [`directory-structure.md`](./directory-structure.md)，真实采集见 [`real-data-collection.md`](./real-data-collection.md)。
 
 ---
@@ -14,8 +14,11 @@
 ```mermaid
 flowchart TD
     A[打开 Web 工作台<br/>http://127.0.0.1:5173] --> B[总览页看帖子量快照]
-    B --> C[监测页上传 JSON / CSV]
-    C --> D[后端规范化 + 去重入库]
+    B --> C{数据从哪来?}
+    C -->|文件| C1[监测页上传 JSON / CSV]
+    C -->|B 站| C2[监测页 B 站评论采集]
+    C1 --> D[后端规范化 + 去重入库]
+    C2 --> D
     D --> E[情感页：同步分析或后台任务]
     E --> F[热点话题：词云 / BERTopic]
     F --> G[预警中心：负面/敏感词 + 热度趋势]
@@ -36,6 +39,23 @@ flowchart TD
     F --> G[storage 插入 posts<br/>UNIQUE platform+source_id]
     G --> H[回写 import_jobs 统计]
     H --> I[前端刷新帖子列表 / 总览]
+```
+
+### 1.2b B 站评论采集（内嵌）
+
+```mermaid
+flowchart TD
+    A[监测页填写关键词或 BV] --> B[POST /api/v1/collect/bilibili]
+    B --> C[api/collect 校验参数]
+    C --> D[services/bilibili_collect]
+    D --> E{有 video?}
+    E -->|是| F[view 解析 aid]
+    E -->|否| G[search/all/v2 或 HTML 抽 BV]
+    G --> F
+    F --> H[reply/main 拉评论<br/>含二级回复]
+    H --> I[normalize_post platform=bili]
+    I --> J[storage 入库 + import_jobs]
+    J --> K[前端刷新任务与帖子列表]
 ```
 
 ### 1.3 情感分析（同步 vs 异步）
@@ -79,7 +99,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     P1[一期 已结项<br/>文件导入<br/>BERT+BERTopic<br/>预警+Prophet<br/>PDF/CSV]
-    P2[二期 已落地<br/>外挂 MediaCrawler<br/>转换导入<br/>轻量 Agent]
+    P2[二期 已落地<br/>外挂 MediaCrawler<br/>内嵌 B 站评论<br/>轻量 Agent]
     P3[另阶段<br/>词典 vs BERT 实验<br/>可选 Redis+RQ]
     P1 --> P2 --> P3
 ```
@@ -119,12 +139,13 @@ mindmap
       无登录
     二期已落地
       外挂 MediaCrawler 转换导入
+      内嵌 B 站评论采集
       监测平台选择
       轻量 Agent 问答与简报
     明确不做近期
       登录鉴权
       多 Agent 编排
-      生产级爬虫内嵌
+      小红书抖音内嵌登录爬虫台
     另阶段可选
       词典 vs BERT 实验
       Redis 加 RQ
@@ -138,6 +159,7 @@ mindmap
     前端 Web
       总览 Overview
       监测 Monitor
+      助手 Agent
       情感 Sentiment
       话题 Topics
       预警 Alerts
@@ -147,16 +169,20 @@ mindmap
     后端 BFF
       health 含 CUDA
       data 导入帖子总览
+      collect B站评论
       analysis 情感主题
       analysis-jobs 异步
       alerts trends reports
+      agent 问答简报
       settings 敏感词
     分析能力 services
       ingest normalize
+      bilibili_collect
       sentiment BERT
       topics BERTopic
       forecast Prophet预警
       report PDF CSV
+      agent
       jobs 线程池
       ollama_embed
     存储
@@ -168,6 +194,7 @@ mindmap
       HuggingFace 模型
       Ollama 向量
       OpenAI 兼容摘要
+      B站公开接口
 ```
 
 ---
@@ -186,7 +213,7 @@ flowchart TB
 
     subgraph BFF["backend · FastAPI BFF"]
         API[api/<br/>校验 · 状态码 · ok/err]
-        SVC[services/<br/>ingest · sentiment · topics<br/>forecast · report · jobs]
+        SVC[services/<br/>ingest · bilibili_collect<br/>sentiment · topics<br/>forecast · report · agent · jobs]
         CFG[config/<br/>settings · device CUDA]
         API --> SVC
         SVC --> CFG
@@ -201,6 +228,7 @@ flowchart TB
         BERT[中文 RoBERTa<br/>GPU / CPU]
         OLL[Ollama 嵌入<br/>BERTopic]
         DS[OpenAI 兼容 LLM<br/>可选报告摘要 / Agent]
+        BILI[B 站公开接口<br/>可选 SESSDATA]
     end
 
     ApiFE -->|HTTP /api/v1| API
@@ -209,6 +237,7 @@ flowchart TB
     SVC --> BERT
     SVC --> OLL
     SVC -.->|可选| DS
+    SVC -.->|可选| BILI
 ```
 
 **调用关系一句话：**

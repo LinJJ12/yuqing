@@ -54,7 +54,21 @@ OPENAI_MODEL=qwen-plus
 
 ---
 
-## 4. 演示最小清单
+## 4. B 站 Cookie（可选，内嵌采集）
+
+监测页「B 站评论采集」未配置 Cookie 时也能跑，但评论条数常被限制。建议：
+
+```text
+# backend/.env
+# 可只填 SESSDATA，或粘贴浏览器整段 Cookie
+BILIBILI_SESSDATA=...
+```
+
+详见 [`real-data-collection.md`](./real-data-collection.md)。修改后重启后端。
+
+---
+
+## 5. 演示最小清单
 
 | 项 | 命令 / 位置 | 通过标准 |
 |----|-------------|---------|
@@ -64,5 +78,6 @@ OPENAI_MODEL=qwen-plus
 | GPU | 设置页设备信息 | `cuda: true`（有卡时） |
 | Ollama | `ollama pull …` | 主题页 BERTopic 不报错 |
 | 样例 | `generate_sample_data.py` + 监测页上传 | 总览有帖子 |
+| B 站（可选） | 监测页采集 + `BILIBILI_SESSDATA` | 入库 `platform=bili` |
 
-核心演示（导入→情感→预警→报告）只需 **情感缓存 + 后端**；主题聚类额外需要 Ollama。
+核心演示（导入→情感→预警→报告）只需 **情感缓存 + 后端**；主题聚类额外需要 Ollama；真评论演示建议配置 B 站 Cookie。

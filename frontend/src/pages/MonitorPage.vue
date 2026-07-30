@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { Upload } from '@lucide/vue'
-import { fetchImports, fetchPosts, uploadImport } from '../api/client'
+import { Download, Upload } from '@lucide/vue'
+import { collectBilibili, fetchImports, fetchPosts, uploadImport } from '../api/client'
 
 const file = ref(null)
 const topic = ref('')
@@ -12,6 +12,15 @@ const error = ref('')
 const posts = ref([])
 const total = ref(0)
 const jobs = ref([])
+
+const biliKeyword = ref('校园食堂')
+const biliVideo = ref('')
+const biliTopic = ref('')
+const biliMaxVideos = ref(2)
+const biliMaxComments = ref(30)
+const collecting = ref(false)
+const biliMessage = ref('')
+const biliError = ref('')
 
 const platforms = [
   { value: 'campus', label: '校园/通用' },
@@ -62,6 +71,42 @@ async function submit() {
   }
 }
 
+async function submitBili() {
+  biliError.value = ''
+  biliMessage.value = ''
+  if (!biliKeyword.value.trim() && !biliVideo.value.trim()) {
+    biliError.value = '请填写关键词或视频 BV/链接'
+    return
+  }
+  collecting.value = true
+  try {
+    const res = await collectBilibili({
+      keyword: biliKeyword.value.trim() || null,
+      video: biliVideo.value.trim() || null,
+      topic: biliTopic.value.trim() || null,
+      max_videos: Number(biliMaxVideos.value) || 2,
+      max_comments_per_video: Number(biliMaxComments.value) || 30,
+      include_video_title: false,
+    })
+    if (!res.ok) {
+      biliError.value = res.error?.message || 'B 站采集失败'
+      return
+    }
+    const s = res.data.stats || {}
+    const videos = s.videos || []
+    const titles = videos.map((v) => v.title || v.bvid).filter(Boolean).slice(0, 3)
+    biliMessage.value =
+      `采集完成：视频 ${videos.length}，评论入库 ${s.inserted ?? 0}` +
+      (titles.length ? `；样例：${titles.join(' / ')}` : '')
+    await refresh()
+  } catch (e) {
+    biliError.value =
+      e?.response?.data?.error?.message || e.message || '采集失败，请确认后端已启动'
+  } finally {
+    collecting.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     await refresh()
@@ -73,6 +118,55 @@ onMounted(async () => {
 
 <template>
   <div class="page">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>B 站评论采集</h2>
+        <span class="pill pill-primary">内嵌</span>
+      </div>
+      <p class="hint">
+        按关键词搜索公开视频并拉取评论入库，或直接填 BV 号/链接。仅演示用，请控制条数。
+        未登录时平台常只返回少量一级评论（会附带二级回复）；若条数偏少，可在
+        <code>backend/.env</code> 配置 <code>BILIBILI_SESSDATA</code> 后重启后端。
+      </p>
+      <div class="form-grid">
+        <label class="field">
+          关键词（搜索视频）
+          <input v-model="biliKeyword" class="input" placeholder="例如：校园食堂" />
+        </label>
+        <label class="field">
+          视频 BV / 链接（可选，优先）
+          <input
+            v-model="biliVideo"
+            class="input"
+            placeholder="BV1… 或 https://www.bilibili.com/video/BV…"
+          />
+        </label>
+        <label class="field">
+          话题（可选）
+          <input v-model="biliTopic" class="input" placeholder="默认用关键词" />
+        </label>
+        <label class="field">
+          最多视频数
+          <input v-model.number="biliMaxVideos" class="input" type="number" min="1" max="10" />
+        </label>
+        <label class="field">
+          每视频评论数
+          <input v-model.number="biliMaxComments" class="input" type="number" min="1" max="200" />
+        </label>
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="collecting"
+          @click="submitBili"
+        >
+          <Download :size="16" />
+          {{ collecting ? '采集中…' : '开始采集并入库' }}
+        </button>
+      </div>
+      <p v-if="biliMessage" class="ok-text" style="margin-top: 0.75rem">{{ biliMessage }}</p>
+      <p v-if="biliError" class="err" style="margin-top: 0.75rem">{{ biliError }}</p>
+    </section>
+
     <section class="panel">
       <div class="panel-head">
         <h2>导入数据</h2>

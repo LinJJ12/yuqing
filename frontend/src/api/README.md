@@ -11,7 +11,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `client.js` | Axios 实例、拦截器、各资源方法 |
+| `client.js` | Axios 实例、代理回退、各资源方法（含 `collectBilibili` / Agent） |
 
 ## 禁止
 

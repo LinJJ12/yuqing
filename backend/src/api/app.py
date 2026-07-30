@@ -13,6 +13,7 @@ from src.storage.db import get_store
 from src.api.alerts import router as alerts_router
 from src.api.analysis import router as analysis_router
 from src.api.agent import router as agent_router
+from src.api.collect import router as collect_router
 from src.api.data import router as data_router
 from src.api.health import router as health_router
 
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(data_router, prefix="/api/v1")
+    app.include_router(collect_router, prefix="/api/v1")
     app.include_router(analysis_router, prefix="/api/v1")
     app.include_router(alerts_router, prefix="/api/v1")
     app.include_router(agent_router, prefix="/api/v1")

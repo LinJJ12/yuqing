@@ -12,13 +12,14 @@
 
 | 文件 | 说明 |
 |------|------|
-| `settings.py` | `Settings`：端口、模型 ID、Ollama、中性阈值、校园关键词 |
+| `settings.py` | `Settings`：端口、模型、Ollama、OpenAI 兼容 LLM、B 站 Cookie、校园关键词 |
 | `device.py` | `get_device_info` / `resolve_device` |
 
 ## 约定
 
 - `.env` 优先读 `backend/.env`，其次仓库根 `.env`。
-- LLM / HF / Ollama 相关地址与模型名**只出自本目录**；其它层经 `settings` 引用。
+- LLM / HF / Ollama / `BILIBILI_SESSDATA` **只出自本目录**；其它层经 `settings` 引用。
+- `BILIBILI_SESSDATA` 可填单字段或整段 Cookie（由 `bilibili_collect` 解析）。
 
 ## 禁止
 

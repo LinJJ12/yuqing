@@ -199,3 +199,10 @@ export async function agentBrief() {
   const { data } = await withFallback(slowApi, 'post', '/agent/brief')
   return data
 }
+
+export async function collectBilibili(payload) {
+  const { data } = await withFallback(slowApi, 'post', '/collect/bilibili', {
+    data: payload,
+  })
+  return data
+}

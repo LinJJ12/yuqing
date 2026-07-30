@@ -45,9 +45,9 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 ```text
 浏览器
   └─ frontend/src/api/  ──HTTP──►  backend/src/api/
-                                      ├─ services/   # 情感 / 主题 / 导入 / 预警
+                                      ├─ services/   # 导入 / B站采集 / 情感 / 主题 / 预警 / Agent
                                       ├─ storage/    # SQLite
-                                      └─ config/     # settings / CUDA / Ollama
+                                      └─ config/     # settings / CUDA / Ollama / Cookie
 ```
 
 ---
@@ -87,6 +87,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | 前端 `src/api` | 后端路由前缀 |
 |----------------|--------------|
 | `client.js` → health / overview / posts / imports | `/api/v1/health*` `/dashboard` `/posts` `/imports` |
+| collect (B 站) | `/api/v1/collect/bilibili` |
 | sentiment / topics / analysis-jobs | `/api/v1/analysis/*` `/analysis-jobs` |
 | alerts / trends / reports / settings | `/api/v1/alerts` `/trends` `/reports/*` `/settings/*` |
 | agent | `/api/v1/agent/*` |
@@ -102,7 +103,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | [`docs/README.md`](./README.md) | 跨端文档 |
 | [`diagrams.md`](./diagrams.md) | 流程 · 思维导图 · 架构图 |
 | [`model-cache.md`](./model-cache.md) | 演示就绪：模型预取 / Ollama |
-| [`real-data-collection.md`](./real-data-collection.md) | 外挂 MediaCrawler 真实采集 |
+| [`real-data-collection.md`](./real-data-collection.md) | 内嵌 B 站评论 + 外挂 MediaCrawler |
 | [`directory-structure.md`](./directory-structure.md) | 目录与 API 垂直表 |
 | [`../.trellis/README.md`](../.trellis/README.md) | 方案与门禁 |
 | [`../vendor/README.md`](../vendor/README.md) | 参考仓 |
