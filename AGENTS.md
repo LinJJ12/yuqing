@@ -1,6 +1,9 @@
 # Yuqing 协作入口
 
 - 目录约定：[`docs/directory-structure.md`](docs/directory-structure.md)
+- 流程与架构图：[`docs/diagrams.md`](docs/diagrams.md)
+- 演示就绪（模型缓存）：[`docs/model-cache.md`](docs/model-cache.md)
+- 真实采集（外挂）：[`docs/real-data-collection.md`](docs/real-data-collection.md)
 - 合并方案：[`.trellis/MERGE_PLAN.md`](.trellis/MERGE_PLAN.md)
 - 后端分层：[`backend/src/README.md`](backend/src/README.md)
 

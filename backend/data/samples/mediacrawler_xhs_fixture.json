@@ -1,0 +1,66 @@
+[
+  {
+    "note_id": "fixture_note_001",
+    "title": "学校食堂窗口太少",
+    "desc": "中午排队久，窗口态度差，希望后勤改进，差评投诉。",
+    "nickname": "校园观察生",
+    "create_time": 1721000000,
+    "liked_count": 128,
+    "comment_count": 36,
+    "share_count": 12,
+    "collected_count": 20,
+    "note_url": "https://example.com/xhs/fixture_note_001",
+    "source_keyword": "食堂"
+  },
+  {
+    "note_id": "fixture_note_002",
+    "title": "图书馆通宵自习室",
+    "desc": "座位干净方便，学习氛围很好，非常满意推荐。",
+    "nickname": "期末复习中",
+    "create_time": 1721086400,
+    "liked_count": 256,
+    "comment_count": 18,
+    "share_count": 8,
+    "collected_count": 40,
+    "note_url": "https://example.com/xhs/fixture_note_002",
+    "source_keyword": "图书馆"
+  },
+  {
+    "note_id": "fixture_note_003",
+    "desc": "宿舍热水故障又停了，报修拖延，真的失望。",
+    "nickname": "住校生A",
+    "create_time": "2024-07-16 09:30:00",
+    "liked_count": 89,
+    "comment_count": 44,
+    "note_url": "https://example.com/xhs/fixture_note_003",
+    "source_keyword": "宿舍"
+  },
+  {
+    "note_id": "fixture_note_004",
+    "title": "奖学金公示",
+    "desc": "奖学金政策很给力，流程清楚，点赞。",
+    "nickname": "大三学长",
+    "create_time": 1721259200,
+    "liked_count": 64,
+    "comment_count": 5,
+    "note_url": "https://example.com/xhs/fixture_note_004"
+  },
+  {
+    "note_id": "fixture_note_005",
+    "title": "校园网抽风",
+    "note_desc": "晚上高峰校园网崩溃，课程直播看不了，不满。",
+    "nickname": "网课受害者",
+    "create_time_str": "2024-07-18 21:00:00",
+    "liked_count": 210,
+    "comment_count": 77,
+    "share_url": "https://example.com/xhs/fixture_note_005",
+    "source_keyword": "校园网"
+  },
+  {
+    "comment_id": "fixture_cmt_001",
+    "note_id": "fixture_note_001",
+    "content": "同感，三食堂也是排队久。",
+    "nickname": "路人乙",
+    "create_time": 1721003600
+  }
+]

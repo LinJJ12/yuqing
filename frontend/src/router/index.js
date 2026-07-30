@@ -38,10 +38,16 @@ const routes = [
     meta: { title: '分析报告', subtitle: '一键汇总当前库内分析结果' },
   },
   {
+    path: '/agent',
+    name: 'agent',
+    component: () => import('../pages/AgentPage.vue'),
+    meta: { title: '智能助手', subtitle: '舆情问答 · 简报生成' },
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('../pages/SettingsPage.vue'),
-    meta: { title: '系统设置', subtitle: '健康检查 · 模型与嵌入配置' },
+    meta: { title: '系统设置', subtitle: '就绪检查 · 敏感词 · 设备信息' },
   },
 ]
 

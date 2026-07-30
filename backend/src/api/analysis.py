@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field
 
 from src.config.device import get_device_info
 from src.lib.http import err, ok
+from src.services.jobs import (
+    enqueue_analysis_job,
+    get_analysis_job,
+    list_analysis_jobs,
+)
 from src.services.sentiment import get_sentiment_analyzer
 from src.services.topics import get_topic_analyzer
 from src.storage.db import get_store
@@ -30,8 +35,18 @@ class AnalyzeTopicsIn(BaseModel):
     use_bertopic: bool = True
 
 
+class AnalysisJobIn(BaseModel):
+    kind: str = Field(description="sentiment | topics | pipeline")
+    limit: int = Field(default=500, ge=1, le=5000)
+    only_pending: bool = True
+    use_bertopic: bool = True
+    topic_limit: int = Field(default=2000, ge=10, le=5000)
+
+
 @router.get("/analysis/status")
 def analysis_status():
+    from src.services.readiness import build_readiness
+
     sent = get_sentiment_analyzer()
     topics = get_topic_analyzer()
     return ok(
@@ -40,6 +55,7 @@ def analysis_status():
             "sentiment": sent.status,
             "topics": topics.status,
             "db": get_store().sentiment_stats(),
+            "readiness": build_readiness(),
         }
     )
 
@@ -135,3 +151,36 @@ def topic_words(top_k: int = Query(default=40, ge=5, le=100)):
     rows = get_store().list_post_texts(limit=3000)
     words = get_topic_analyzer().word_cloud([r["text"] for r in rows], top_k=top_k)
     return ok({"word_cloud": words, "document_count": len(rows)})
+
+
+@router.post("/analysis-jobs")
+def create_analysis_job(body: AnalysisJobIn):
+    try:
+        job = enqueue_analysis_job(
+            body.kind,
+            {
+                "limit": body.limit,
+                "only_pending": body.only_pending,
+                "use_bertopic": body.use_bertopic,
+                "topic_limit": body.topic_limit,
+            },
+        )
+        return ok(job)
+    except ValueError as exc:
+        return err("invalid_job", str(exc), status=400)
+    except Exception as exc:
+        return err("job_enqueue_failed", f"创建任务失败: {exc}", status=500)
+
+
+@router.get("/analysis-jobs")
+def analysis_jobs(limit: int = Query(default=20, ge=1, le=100)):
+    items = list_analysis_jobs(limit)
+    return ok({"items": items, "count": len(items)})
+
+
+@router.get("/analysis-jobs/{job_id}")
+def analysis_job_detail(job_id: str):
+    job = get_analysis_job(job_id)
+    if not job:
+        return err("not_found", "任务不存在", status=404)
+    return ok(job)

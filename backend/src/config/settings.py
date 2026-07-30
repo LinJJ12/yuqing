@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/src/config/settings.py → backend/
@@ -59,6 +60,68 @@ class Settings(BaseSettings):
         "校园网",
         "后勤",
     ]
+    default_alert_keywords: list[str] = [
+        "投诉",
+        "差评",
+        "故障",
+        "不满",
+        "恶心",
+        "离谱",
+        "失望",
+        "崩溃",
+        "排队久",
+        "脏乱",
+        "难吃",
+        "拖延",
+        "态度差",
+    ]
+
+    # 云端 LLM：OpenAI 兼容（火山 / 百炼 / DeepSeek / 官方等）
+    # 亦兼容旧环境变量 DEEPSEEK_*（见 AliasChoices）
+    openai_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "openai_api_key",
+            "OPENAI_API_KEY",
+            "DEEPSEEK_API_KEY",
+        ),
+    )
+    openai_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "openai_base_url",
+            "OPENAI_BASE_URL",
+            "DEEPSEEK_BASE_URL",
+        ),
+    )
+    openai_model: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "openai_model",
+            "OPENAI_MODEL",
+            "DEEPSEEK_MODEL",
+        ),
+    )
+
+    # Agent：无云端 Key 时回退 Ollama Chat
+    ollama_chat_model: str = "qwen2.5"
+
+    @property
+    def llm_api_key(self) -> str:
+        return (self.openai_api_key or "").strip()
+
+    @property
+    def llm_base_url(self) -> str | None:
+        url = (self.openai_base_url or "").strip().rstrip("/")
+        return url or None
+
+    @property
+    def llm_model(self) -> str:
+        return (self.openai_model or "").strip() or "gpt-4o-mini"
+
+    @property
+    def has_cloud_llm(self) -> bool:
+        return bool(self.llm_api_key)
 
 
 settings = Settings()

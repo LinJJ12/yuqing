@@ -16,7 +16,11 @@
 | `sentiment.py` | 中文 RoBERTa；正/中/负（含阈值推断中性） |
 | `topics.py` | 词云 / TF-IDF / BERTopic |
 | `ollama_embed.py` | 本地 Ollama 向量（供 BERTopic） |
-| `forecast.py` | 日聚合滑动平均、预警规则、报告摘要 |
+| `forecast.py` | 日聚合滑动平均、Prophet、预警规则、报告摘要 |
+| `report.py` | PDF / CSV 导出；可选 OpenAI 兼容摘要 |
+| `jobs.py` | 异步分析任务（进程内线程池） |
+| `readiness.py` | 情感缓存 / Ollama / 云端 LLM / Agent 就绪探测 |
+| `agent.py` | 轻量舆情问答与简报（OpenAI 兼容 / Ollama Chat） |
 
 ## 调用
 

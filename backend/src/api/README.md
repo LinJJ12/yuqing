@@ -15,8 +15,9 @@
 | `app.py` | 创建 `FastAPI` 应用 |
 | `health.py` | `/api/v1/health/*` |
 | `data.py` | `/imports` `/posts` `/dashboard/overview` |
-| `analysis.py` | `/analysis/sentiment*` `/analysis/topics*` |
-| `alerts.py` | `/alerts` `/trends` `/reports/summary` |
+| `alerts.py` | `/alerts` `/trends` `/reports/*` `/settings/alert-keywords` |
+| `analysis.py` | `/analysis/*` `/analysis-jobs` |
+| `agent.py` | `/agent/status` `/agent/chat` `/agent/brief` |
 
 ## 下一层怎么选
 

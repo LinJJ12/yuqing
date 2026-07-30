@@ -17,6 +17,7 @@
 | `TopicsPage.vue` | `/topics` |
 | `AlertsPage.vue` | `/alerts` |
 | `ReportsPage.vue` | `/reports` |
+| `AgentPage.vue` | `/agent` |
 | `SettingsPage.vue` | `/settings` |
 
 ## 禁止

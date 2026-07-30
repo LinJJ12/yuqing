@@ -1,11 +1,18 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { RefreshCw } from '@lucide/vue'
-import { fetchReportSummary } from '../api/client'
+import { Download, FileText, RefreshCw, Sparkles } from '@lucide/vue'
+import {
+  fetchReportSummary,
+  generateReportSummary,
+  reportCsvUrl,
+  reportPdfUrl,
+} from '../api/client'
 
 const loading = ref(true)
+const aiLoading = ref(false)
 const error = ref('')
 const report = ref(null)
+const withAiExport = ref(false)
 const labelMap = {
   positive: '正面',
   neutral: '中性',
@@ -32,6 +39,28 @@ async function refresh() {
   }
 }
 
+async function onAiSummary() {
+  aiLoading.value = true
+  error.value = ''
+  try {
+    const res = await generateReportSummary({ with_ai: true })
+    if (!res.ok) throw new Error(res.error?.message || '摘要失败')
+    report.value = res.data
+    if (res.data?.ai && !res.data.ai.summary) {
+      error.value = res.data.ai.message || 'AI 摘要不可用'
+    }
+  } catch (e) {
+    error.value = e.message || 'AI 摘要失败'
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+function openExport(kind) {
+  const url = kind === 'pdf' ? reportPdfUrl({ with_ai: withAiExport.value }) : reportCsvUrl({ with_ai: withAiExport.value })
+  window.open(url, '_blank')
+}
+
 onMounted(refresh)
 </script>
 
@@ -40,9 +69,29 @@ onMounted(refresh)
     <section class="panel">
       <div class="panel-head">
         <h2>分析报告</h2>
-        <button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="refresh">
-          <RefreshCw :size="14" />
-          重新生成
+        <div class="head-actions">
+          <button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="refresh">
+            <RefreshCw :size="14" />
+            重新生成
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" :disabled="aiLoading || loading" @click="onAiSummary">
+            <Sparkles :size="14" />
+            AI 摘要
+          </button>
+        </div>
+      </div>
+      <div class="export-row">
+        <label class="check">
+          <input v-model="withAiExport" type="checkbox" />
+          导出时附带 AI 摘要（需配置 OPENAI_API_KEY）
+        </label>
+        <button type="button" class="btn btn-primary btn-sm" @click="openExport('csv')">
+          <Download :size="14" />
+          导出 CSV
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" @click="openExport('pdf')">
+          <FileText :size="14" />
+          导出 PDF
         </button>
       </div>
       <p v-if="loading" class="muted">正在汇总…</p>
@@ -84,6 +133,11 @@ onMounted(refresh)
           </li>
         </ul>
 
+        <template v-if="report.ai_summary">
+          <h4>AI 摘要</h4>
+          <p class="ai-box">{{ report.ai_summary }}</p>
+        </template>
+
         <h4>说明</h4>
         <ul class="notes">
           <li v-for="(n, i) in report.notes || []" :key="i">{{ n }}</li>
@@ -104,5 +158,34 @@ onMounted(refresh)
   padding-left: 1.1rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+.head-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.export-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.75rem 0 1rem;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-right: 0.4rem;
+}
+.ai-box {
+  margin: 0.35rem 0 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg-secondary, #f8fafc);
+  border-left: 3px solid #1e40af;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 </style>

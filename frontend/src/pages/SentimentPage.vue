@@ -1,22 +1,28 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import { Play, RotateCcw, Sparkles } from '@lucide/vue'
 import {
+  createAnalysisJob,
+  fetchAnalysisJob,
+  fetchAnalysisJobs,
   fetchSentimentStats,
   previewSentiment,
   runSentiment,
 } from '../api/client'
 
 const loading = ref(false)
+const jobLoading = ref(false)
 const message = ref('')
 const error = ref('')
 const stats = ref(null)
 const sample = ref([])
+const jobs = ref([])
 const previewText = ref('三食堂排队太久，窗口太少，希望后勤尽快处理。')
 const previewResult = ref(null)
 const chartRef = ref(null)
 let chart
+let pollTimer = null
 
 const labelMap = {
   positive: '正面',
@@ -25,10 +31,65 @@ const labelMap = {
   unknown: '未标注',
 }
 
+const jobStatusMap = {
+  queued: '排队中',
+  running: '运行中',
+  succeeded: '成功',
+  failed: '失败',
+}
+
 const bertProgress = computed(() => {
   if (!stats.value?.total) return '0%'
   return `${Math.round((stats.value.bert_done / stats.value.total) * 100)}%`
 })
+
+async function refreshJobs() {
+  const res = await fetchAnalysisJobs(8)
+  if (res.ok) jobs.value = res.data.items || []
+}
+
+async function onAsyncJob(kind = 'sentiment') {
+  jobLoading.value = true
+  error.value = ''
+  message.value = '已提交后台任务…'
+  try {
+    const res = await createAnalysisJob({
+      kind,
+      limit: 1000,
+      only_pending: true,
+      use_bertopic: true,
+    })
+    if (!res.ok) {
+      error.value = res.error?.message || '任务创建失败'
+      jobLoading.value = false
+      return
+    }
+    const jobId = res.data.id
+    message.value = `任务 ${jobId.slice(0, 8)}… 已排队`
+    await refreshJobs()
+    clearInterval(pollTimer)
+    pollTimer = setInterval(async () => {
+      const detail = await fetchAnalysisJob(jobId)
+      if (!detail.ok) return
+      await refreshJobs()
+      if (detail.data.status === 'succeeded') {
+        clearInterval(pollTimer)
+        pollTimer = null
+        message.value = `后台任务完成（${kind}）`
+        await refreshStats()
+        jobLoading.value = false
+      } else if (detail.data.status === 'failed') {
+        clearInterval(pollTimer)
+        pollTimer = null
+        error.value = detail.data.error_message || '后台任务失败'
+        jobLoading.value = false
+      }
+    }, 1500)
+  } catch (e) {
+    error.value = e.message || '任务提交失败'
+    jobLoading.value = false
+  }
+}
 
 function renderChart() {
   if (!chartRef.value || !stats.value) return
@@ -123,10 +184,18 @@ async function onPreview() {
 onMounted(async () => {
   try {
     await refreshStats()
+    await refreshJobs()
   } catch {
     error.value = '无法连接后端'
   }
   window.addEventListener('resize', () => chart?.resize())
+})
+
+onUnmounted(() => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 })
 </script>
 
@@ -137,16 +206,20 @@ onMounted(async () => {
         <h2>情感分析</h2>
       </div>
       <p class="hint">
-        输出正面 / 中性 / 负面。首次运行可能需要加载模型，请稍候。
+        输出正面 / 中性 / 负面。首次运行可能需要加载模型，请稍候。也可提交后台任务异步执行。
       </p>
       <div class="actions">
-        <button type="button" class="btn btn-primary" :disabled="loading" @click="onRun(true)">
+        <button type="button" class="btn btn-primary" :disabled="loading || jobLoading" @click="onRun(true)">
           <Play :size="16" />
           分析待处理
         </button>
-        <button type="button" class="btn btn-secondary" :disabled="loading" @click="onRun(false)">
+        <button type="button" class="btn btn-secondary" :disabled="loading || jobLoading" @click="onRun(false)">
           <RotateCcw :size="16" />
           全量重跑
+        </button>
+        <button type="button" class="btn btn-secondary" :disabled="loading || jobLoading" @click="onAsyncJob('sentiment')">
+          <Sparkles :size="16" />
+          后台任务
         </button>
       </div>
       <p v-if="message" class="ok-text">{{ message }}</p>
@@ -170,6 +243,16 @@ onMounted(async () => {
         </div>
       </div>
       <div ref="chartRef" class="chart-box" style="margin-top: 0.5rem" />
+    </section>
+
+    <section v-if="jobs.length" class="panel">
+      <div class="panel-head"><h3>最近任务</h3></div>
+      <ul class="stack-list">
+        <li v-for="job in jobs" :key="job.id">
+          <span>{{ job.kind }} · {{ jobStatusMap[job.status] || job.status }} · {{ job.created_at }}</span>
+          <b>{{ job.id.slice(0, 8) }}</b>
+        </li>
+      </ul>
     </section>
 
     <section class="panel">

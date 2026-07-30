@@ -58,6 +58,11 @@ def main() -> None:
 
         r = client.get("/api/v1/health/ready")
         check("health ready", r.status_code == 200 and r.json()["ok"] is True)
+        check("health readiness", "readiness" in r.json()["data"])
+        check(
+            "readiness sentiment",
+            "cached" in r.json()["data"]["readiness"]["sentiment"],
+        )
 
         r = client.get("/api/v1/dashboard/overview")
         check("dashboard", r.status_code == 200 and r.json()["data"]["total_posts"] == 3)
@@ -74,8 +79,85 @@ def main() -> None:
         r = client.get("/api/v1/reports/summary")
         check("reports", r.status_code == 200 and r.json()["ok"] is True)
 
+        r = client.get("/api/v1/reports/export.csv")
+        check("export csv", r.status_code == 200 and r.headers["content-type"].startswith("text/csv"))
+
+        r = client.get("/api/v1/reports/export.pdf")
+        check("export pdf", r.status_code == 200 and r.content[:4] == b"%PDF")
+
+        # 用户文本含 <>& 时 PDF 不得解析失败
+        from src.services.report import build_pdf_bytes
+
+        nasty = {
+            "generated_for": "测试 <报告>",
+            "overview": {
+                "total_posts": 1,
+                "by_topic": [{"topic": "A<B&C", "count": 1}],
+            },
+            "sentiment": {
+                "bert_done": 0,
+                "breakdown": [{"label": "negative", "method": "lexicon", "count": 1}],
+            },
+            "alerts": {
+                "total": 1,
+                "high": 1,
+                "items": [
+                    {
+                        "severity": "high",
+                        "title": "标题 <未闭合",
+                        "message": "内容 & 更多 <tag>",
+                    }
+                ],
+            },
+            "notes": ["说明 <ok>"],
+            "ai_summary": "摘要 <em>x",
+        }
+        pdf = build_pdf_bytes(nasty)
+        check("pdf escape", pdf[:4] == b"%PDF", str(len(pdf)))
+
+        r = client.get("/api/v1/settings/alert-keywords")
+        check("alert keywords get", r.status_code == 200 and isinstance(r.json()["data"]["keywords"], list))
+
+        r = client.put("/api/v1/settings/alert-keywords", json={"keywords": ["投诉", "差评", "测试词"]})
+        check("alert keywords put", r.status_code == 200 and "测试词" in r.json()["data"]["keywords"])
+
+        r = client.post("/api/v1/analysis-jobs", json={"kind": "sentiment", "limit": 10})
+        check("analysis job create", r.status_code == 200 and r.json()["ok"] is True)
+        job_id = r.json()["data"]["id"]
+        r = client.get(f"/api/v1/analysis-jobs/{job_id}")
+        check("analysis job get", r.status_code == 200 and r.json()["data"]["id"] == job_id)
+
         r = client.get("/api/v1/analysis/status")
         check("analysis status", r.status_code == 200 and r.json()["ok"] is True)
+
+        r = client.get("/api/v1/agent/status")
+        check("agent status", r.status_code == 200 and "ready" in r.json()["data"])
+
+        r = client.post("/api/v1/agent/chat", json={"question": "当前主要风险是什么？"})
+        check("agent chat status", r.status_code in (200, 503), str(r.status_code))
+        if r.status_code == 200:
+            check("agent chat ok", r.json().get("ok") is True and bool(r.json()["data"].get("content")))
+        else:
+            check(
+                "agent chat unavailable",
+                r.json().get("ok") is False,
+                (r.text or "")[:160],
+            )
+
+        # MediaCrawler 字段规范化
+        mc = normalize_post(
+            {
+                "note_id": "n-smoke-1",
+                "title": "食堂",
+                "desc": "排队久差评投诉",
+                "nickname": "测",
+                "create_time": 1721000000,
+                "liked_count": 3,
+            },
+            platform="xhs",
+        )
+        check("mc normalize platform", mc["platform"] == "xhs")
+        check("mc normalize text", "排队久" in mc["text"] and mc["source_id"] == "n-smoke-1")
 
         # 导入 JSON
         sample = [
@@ -131,6 +213,28 @@ def main() -> None:
     # 5) 配置路径
     check("data dir under backend", "backend" in str(DATA_DIR).replace("\\", "/"))
     check("db path under data", str(DATA_DIR) in settings.db_path or Path(settings.db_path).parent == DATA_DIR)
+
+    # 6) MediaCrawler 夹具转换
+    fixture = DATA_DIR / "samples" / "mediacrawler_xhs_fixture.json"
+    if fixture.exists():
+        import importlib.util
+
+        conv_path = BACKEND / "scripts" / "convert_mediacrawler.py"
+        spec = importlib.util.spec_from_file_location("convert_mediacrawler", conv_path)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+        rows = mod._load_file(fixture)
+        posts, stats = mod.convert_records(rows, platform="xhs", include_comments=False)
+        check("mc convert content", stats["normalize_ok"] >= 5 and len(posts) >= 5, str(stats))
+        posts_c, stats_c = mod.convert_records(rows, platform="xhs", include_comments=True)
+        check(
+            "mc convert with comments",
+            stats_c["comments"] >= 1 and len(posts_c) > len(posts),
+            str(stats_c),
+        )
+    else:
+        print("[WARN] mediacrawler fixture missing, skip convert check")
 
     print("\nALL CHECKS PASSED")
     tmp.cleanup()

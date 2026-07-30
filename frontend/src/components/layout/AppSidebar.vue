@@ -8,6 +8,7 @@ import {
   Hash,
   BellRing,
   FileText,
+  Bot,
   Settings,
   ChevronsLeft,
   ChevronsRight,
@@ -23,6 +24,7 @@ const nav = [
   { to: '/topics', label: '话题', icon: Hash },
   { to: '/alerts', label: '预警', icon: BellRing },
   { to: '/reports', label: '报告', icon: FileText },
+  { to: '/agent', label: '助手', icon: Bot },
   { to: '/settings', label: '设置', icon: Settings },
 ]
 

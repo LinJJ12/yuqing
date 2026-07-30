@@ -1,6 +1,6 @@
 # yuqing — 校园舆情（Python + Vue + GPU）
 
-统一环境 + 合并工程。目录约定见 [`docs/directory-structure.md`](docs/directory-structure.md)，方案见 [`.trellis/MERGE_PLAN.md`](.trellis/MERGE_PLAN.md)。
+统一环境 + 合并工程。目录约定见 [`docs/directory-structure.md`](docs/directory-structure.md)，流程与架构图见 [`docs/diagrams.md`](docs/diagrams.md)，方案见 [`.trellis/MERGE_PLAN.md`](.trellis/MERGE_PLAN.md)。
 
 结构对齐桌面 **chatbot / OmniStream**：`frontend/` + `backend/` 并列，参考仓在 `vendor/`。
 
@@ -10,8 +10,11 @@
 |------|------|
 | 情感 | 词典快筛 + 中文 RoBERTa/BERT（正/中/负，GPU） |
 | 主题 | 词云 + BERTopic（本地 Ollama 向量） |
-| 趋势 | 滑动平均 |
-| 预警 | 负面/敏感词 + 热度突增 |
+| 趋势 | 滑动平均 + Prophet |
+| 预警 | 负面/敏感词（可配置）+ 热度突增 |
+| 报告 | 页面汇总 + PDF/CSV；可选 OpenAI 兼容摘要 |
+| 采集 | 文件导入；外挂 MediaCrawler 转换（见 docs/real-data-collection.md） |
+| 助手 | 舆情问答 + 简报（OpenAI 兼容 / Ollama Chat） |
 
 ## 环境
 
@@ -41,6 +44,18 @@ npm run dev
 uv run python backend/scripts/generate_sample_data.py
 # 监测页上传 backend/data/samples/campus_sample.json
 ```
+
+### 演示前（防翻车）
+
+```powershell
+# 预取情感模型到本机缓存（国内请在 backend/.env 设 HF_ENDPOINT=https://hf-mirror.com）
+uv run python backend/scripts/prefetch_models.py
+
+# 主题聚类还需 Ollama：
+# ollama pull quentinz/bge-large-zh-v1.5
+```
+
+详情见 [`docs/model-cache.md`](docs/model-cache.md)。设置页可查看情感 / Ollama / 云端 LLM 就绪状态。
 
 ## 目录
 

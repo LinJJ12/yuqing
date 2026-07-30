@@ -31,7 +31,7 @@
 主题:  TF-IDF 词云 + BERTopic（嵌入可走 GPU）
 趋势:  日聚合 + 滑动平均；可选 Prophet
 传播:  不做 SIR → 增长率 / 峰值检测
-报告:  PDF/CSV；可选 DeepSeek 摘要
+报告:  PDF/CSV；可选 OpenAI 兼容摘要
 采集:  文件导入优先；MediaCrawler 二期
 ```
 
@@ -87,12 +87,17 @@ yuqing/
 
 | 方法 | 路径 | 用途 |
 |------|------|------|
-| POST | `/api/v1/auth/login` | 登录 |
 | POST | `/api/v1/imports` | 上传数据 |
-| POST | `/api/v1/analysis-jobs` | 分析任务 |
+| POST | `/api/v1/analysis-jobs` | 异步分析任务 |
+| GET  | `/api/v1/analysis-jobs/{id}` | 任务状态 |
 | GET  | `/api/v1/dashboard/overview` | 总览 |
 | GET  | `/api/v1/alerts` | 预警 |
-| POST | `/api/v1/reports` | 报告 |
+| GET  | `/api/v1/trends` | 趋势（滑动平均 + Prophet） |
+| GET  | `/api/v1/reports/summary` | 报告汇总 |
+| POST | `/api/v1/reports/summary` | 报告汇总（可选 AI） |
+| GET  | `/api/v1/reports/export.csv` | 导出 CSV |
+| GET  | `/api/v1/reports/export.pdf` | 导出 PDF |
+| GET/PUT | `/api/v1/settings/alert-keywords` | 预警敏感词 |
 | GET  | `/api/v1/health/live` | 存活 |
 | GET  | `/api/v1/health/ready` | 含 `cuda` |
 
@@ -124,11 +129,13 @@ yuqing/
 2. 增长率峰值 + 校园敏感词/负面预警  
 3. 预警中心 / 报告 / 设置页（不再占位）
 
-### Phase E — 报告与打磨
-PDF/CSV、可选 DeepSeek、登录、答辩 Demo  
+### Phase E — 报告与打磨 ✅ 已完成（无登录 / 无答辩文档）
+PDF/CSV 导出、可选 OpenAI 兼容摘要、Prophet、异步 analysis-jobs、预警敏感词可配置
 
-### Phase F — 增强（可选）
-MediaCrawler、轻量 Agent、词典 vs BERT 对比实验表  
+### Phase F — 增强
+- [x] 外挂 MediaCrawler 转换导入 + 监测平台选择（见 `docs/real-data-collection.md`）
+- [x] 轻量 Agent（问答 + 简报）
+- [ ] 词典 vs BERT 对比实验表、Redis+RQ  
 
 ---
 

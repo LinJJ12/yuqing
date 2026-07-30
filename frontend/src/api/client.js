@@ -69,7 +69,10 @@ export async function fetchImports(limit = 20) {
   return data
 }
 
-export async function uploadImport(file, { topic = '文件导入', platform = 'campus' } = {}) {
+export async function uploadImport(
+  file,
+  { topic = '文件导入', platform = 'campus' } = {},
+) {
   const form = new FormData()
   form.append('file', file)
   form.append('topic', topic)
@@ -121,12 +124,78 @@ export async function fetchAlerts(limit = 50) {
   return data
 }
 
-export async function fetchTrends(days = 14) {
-  const { data } = await withFallback(api, 'get', '/trends', { params: { days } })
+export async function fetchTrends(days = 14, { use_prophet = true, prophet_horizon = 7 } = {}) {
+  const { data } = await withFallback(api, 'get', '/trends', {
+    params: { days, use_prophet, prophet_horizon },
+  })
   return data
 }
 
 export async function fetchReportSummary() {
   const { data } = await withFallback(api, 'get', '/reports/summary')
+  return data
+}
+
+export async function generateReportSummary({ with_ai = false } = {}) {
+  const { data } = await withFallback(slowApi, 'post', '/reports/summary', {
+    data: { with_ai },
+  })
+  return data
+}
+
+function exportUrl(path, params = {}) {
+  const qs = new URLSearchParams(params).toString()
+  return `${DIRECT}${path}${qs ? `?${qs}` : ''}`
+}
+
+export function reportCsvUrl({ with_ai = false } = {}) {
+  return exportUrl('/reports/export.csv', { with_ai })
+}
+
+export function reportPdfUrl({ with_ai = false } = {}) {
+  return exportUrl('/reports/export.pdf', { with_ai })
+}
+
+export async function fetchAlertKeywords() {
+  const { data } = await withFallback(api, 'get', '/settings/alert-keywords')
+  return data
+}
+
+export async function saveAlertKeywords(keywords) {
+  const { data } = await withFallback(api, 'put', '/settings/alert-keywords', {
+    data: { keywords },
+  })
+  return data
+}
+
+export async function createAnalysisJob(payload) {
+  const { data } = await withFallback(api, 'post', '/analysis-jobs', { data: payload })
+  return data
+}
+
+export async function fetchAnalysisJobs(limit = 20) {
+  const { data } = await withFallback(api, 'get', '/analysis-jobs', { params: { limit } })
+  return data
+}
+
+export async function fetchAnalysisJob(jobId) {
+  const { data } = await withFallback(api, 'get', `/analysis-jobs/${jobId}`)
+  return data
+}
+
+export async function fetchAgentStatus() {
+  const { data } = await withFallback(api, 'get', '/agent/status')
+  return data
+}
+
+export async function agentChat(question, history = []) {
+  const { data } = await withFallback(slowApi, 'post', '/agent/chat', {
+    data: { question, history },
+  })
+  return data
+}
+
+export async function agentBrief() {
+  const { data } = await withFallback(slowApi, 'post', '/agent/brief')
   return data
 }

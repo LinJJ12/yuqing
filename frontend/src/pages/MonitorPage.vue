@@ -5,12 +5,21 @@ import { fetchImports, fetchPosts, uploadImport } from '../api/client'
 
 const file = ref(null)
 const topic = ref('')
+const platform = ref('campus')
 const uploading = ref(false)
 const message = ref('')
 const error = ref('')
 const posts = ref([])
 const total = ref(0)
 const jobs = ref([])
+
+const platforms = [
+  { value: 'campus', label: '校园/通用' },
+  { value: 'xhs', label: '小红书 (xhs)' },
+  { value: 'dy', label: '抖音 (dy)' },
+  { value: 'wb', label: '微博 (wb)' },
+  { value: 'bili', label: 'B站 (bili)' },
+]
 
 async function refresh() {
   const [p, j] = await Promise.all([fetchPosts({ limit: 30 }), fetchImports(10)])
@@ -36,6 +45,7 @@ async function submit() {
   try {
     const res = await uploadImport(file.value, {
       topic: topic.value.trim() || '文件导入',
+      platform: platform.value,
     })
     if (!res.ok) {
       error.value = res.error?.message || '导入失败'
@@ -68,8 +78,19 @@ onMounted(async () => {
         <h2>导入数据</h2>
         <span class="pill pill-default">JSON / CSV</span>
       </div>
-      <p class="hint">支持 JSON / JSONL / CSV。可用项目脚本生成样例后在此上传。</p>
+      <p class="hint">
+        支持 JSON / JSONL / CSV。校园样例或 MediaCrawler 转换结果均可上传；真实采集步骤见
+        <code>docs/real-data-collection.md</code>。
+      </p>
       <div class="form-grid">
+        <label class="field">
+          平台
+          <select v-model="platform" class="input">
+            <option v-for="p in platforms" :key="p.value" :value="p.value">
+              {{ p.label }}
+            </option>
+          </select>
+        </label>
         <label class="field">
           话题（可选，不填则按正文关键词自动归类）
           <input v-model="topic" class="input" placeholder="例如：食堂" />
@@ -102,6 +123,7 @@ onMounted(async () => {
           <tr>
             <th>时间</th>
             <th>文件</th>
+            <th>平台</th>
             <th>状态</th>
             <th>入库</th>
           </tr>
@@ -110,6 +132,7 @@ onMounted(async () => {
           <tr v-for="job in jobs" :key="job.id">
             <td>{{ job.created_at }}</td>
             <td>{{ job.filename }}</td>
+            <td>{{ job.platform || '—' }}</td>
             <td>
               <span class="pill pill-primary">{{ job.status }}</span>
             </td>
@@ -129,6 +152,7 @@ onMounted(async () => {
         <article v-for="post in posts" :key="post.id" class="post-item">
           <header class="post-meta">
             <b>{{ post.topic }}</b>
+            <span class="pill pill-default">{{ post.platform || '—' }}</span>
             <span class="pill pill-default">{{ post.sentiment_label || '—' }}</span>
             <em>{{ post.author || '匿名' }}</em>
           </header>

@@ -12,6 +12,8 @@
 | 脚本 | 说明 |
 |------|------|
 | `generate_sample_data.py` | 写入 `backend/data/samples/campus_sample.json` |
+| `convert_mediacrawler.py` | MediaCrawler 导出 → Yuqing 可导入 JSON |
+| `prefetch_models.py` | 预取情感模型到本机 HF 缓存（演示防翻车） |
 | `smoke_test.py` | 规范化 / API / CUDA 等断言 |
 
 ## 用法
@@ -19,6 +21,8 @@
 ```powershell
 # 在仓库根
 uv run python backend/scripts/generate_sample_data.py
+uv run python backend/scripts/convert_mediacrawler.py backend/data/samples/mediacrawler_xhs_fixture.json --platform xhs
+uv run python backend/scripts/prefetch_models.py
 uv run python backend/scripts/smoke_test.py
 ```
 

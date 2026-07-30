@@ -4,7 +4,7 @@
 
 ## 职责
 
-- **唯一**业务 I/O：SQLite 帖子、导入任务、统计。
+- **唯一**业务 I/O：SQLite 帖子、导入/分析任务、设置键值、统计。
 - 表结构初始化、WAL、去重插入、情感字段更新、总览聚合。
 
 ## 文件
@@ -16,6 +16,7 @@
 ## 约定
 
 - DB 路径默认 `backend/data/yuqing.db`（见 `config.settings`）。
+- 表：`posts`、`import_jobs`、`analysis_jobs`、`app_settings`。
 - `__init__.py` 仅作包标记，不堆再导出。
 
 ## 禁止

@@ -1,19 +1,21 @@
-# `backend/data/` — 运行时数据（不进 Git）
+# `backend/data/` — 运行时数据
 
 上级规范：[../README.md](../README.md)
 
 ## 职责
 
 - 存放 SQLite、上传导入文件、样例 JSON 等本地运行产物。
-- 整目录已在根 `.gitignore` 中忽略。
+- 默认整目录忽略；**合成样例**可进 Git：`samples/`。
 
-## 布局（运行后生成）
+## 布局
 
 ```text
 data/
-├── yuqing.db          # 主库
-├── imports/           # 上传落盘
-└── samples/           # generate_sample_data.py 输出
+├── yuqing.db          # 主库（gitignore）
+├── imports/           # 上传/转换落盘（gitignore）
+└── samples/           # 合成样例（可提交；勿放真实用户数据）
+    ├── campus_sample.json           # generate_sample_data.py
+    └── mediacrawler_xhs_fixture.json # 仿 MediaCrawler 字段
 ```
 
 ## 禁止

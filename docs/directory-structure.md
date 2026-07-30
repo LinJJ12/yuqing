@@ -87,8 +87,9 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | 前端 `src/api` | 后端路由前缀 |
 |----------------|--------------|
 | `client.js` → health / overview / posts / imports | `/api/v1/health*` `/dashboard` `/posts` `/imports` |
-| sentiment / topics | `/api/v1/analysis/*` |
-| alerts / trends / reports | `/api/v1/alerts` `/trends` `/reports/*` |
+| sentiment / topics / analysis-jobs | `/api/v1/analysis/*` `/analysis-jobs` |
+| alerts / trends / reports / settings | `/api/v1/alerts` `/trends` `/reports/*` `/settings/*` |
+| agent | `/api/v1/agent/*` |
 
 统一响应：`{ "ok": true, "data": ... }` / `{ "ok": false, "error": { "code", "message" } }`。
 
@@ -99,6 +100,10 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | README | 覆盖 |
 |--------|------|
 | [`docs/README.md`](./README.md) | 跨端文档 |
+| [`diagrams.md`](./diagrams.md) | 流程 · 思维导图 · 架构图 |
+| [`model-cache.md`](./model-cache.md) | 演示就绪：模型预取 / Ollama |
+| [`real-data-collection.md`](./real-data-collection.md) | 外挂 MediaCrawler 真实采集 |
+| [`directory-structure.md`](./directory-structure.md) | 目录与 API 垂直表 |
 | [`../.trellis/README.md`](../.trellis/README.md) | 方案与门禁 |
 | [`../vendor/README.md`](../vendor/README.md) | 参考仓 |
 | [`../frontend/README.md`](../frontend/README.md) | 前端工程 |

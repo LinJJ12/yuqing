@@ -1,4 +1,4 @@
-"""SQLite 持久化（一期：帖子 + 导入任务）。"""
+"""SQLite 持久化（一期：帖子 + 导入/分析任务 + 设置）。"""
 
 from __future__ import annotations
 
@@ -89,6 +89,25 @@ class Store:
                     ON posts(published_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_posts_topic
                     ON posts(topic);
+
+                CREATE TABLE IF NOT EXISTS analysis_jobs (
+                    id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    params_json TEXT NOT NULL DEFAULT '{}',
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    error_message TEXT,
+                    created_at TEXT NOT NULL,
+                    finished_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_analysis_jobs_created
+                    ON analysis_jobs(created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key TEXT PRIMARY KEY,
+                    value_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -285,6 +304,93 @@ class Store:
                 for r in by_label
             ],
         }
+
+    def create_analysis_job(self, kind: str, params: dict | None = None) -> dict:
+        job_id = uuid.uuid4().hex
+        now = utc_now()
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO analysis_jobs(
+                    id, kind, status, params_json, result_json, created_at
+                ) VALUES (?, ?, 'queued', ?, '{}', ?)""",
+                (job_id, kind, _dump(params or {}), now),
+            )
+        return self.get_analysis_job(job_id)  # type: ignore[return-value]
+
+    def update_analysis_job(
+        self,
+        job_id: str,
+        *,
+        status: str,
+        result: dict | None = None,
+        error_message: str | None = None,
+    ) -> dict | None:
+        finished = utc_now() if status in {"succeeded", "failed"} else None
+        with self.connect() as conn:
+            if result is not None:
+                conn.execute(
+                    """UPDATE analysis_jobs
+                       SET status = ?, result_json = ?, error_message = ?,
+                           finished_at = COALESCE(?, finished_at)
+                       WHERE id = ?""",
+                    (status, _dump(result), error_message, finished, job_id),
+                )
+            else:
+                conn.execute(
+                    """UPDATE analysis_jobs
+                       SET status = ?, error_message = ?,
+                           finished_at = COALESCE(?, finished_at)
+                       WHERE id = ?""",
+                    (status, error_message, finished, job_id),
+                )
+        return self.get_analysis_job(job_id)
+
+    def get_analysis_job(self, job_id: str) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM analysis_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        data = dict(row)
+        data["params"] = _load(data.pop("params_json"), {})
+        data["result"] = _load(data.pop("result_json"), {})
+        return data
+
+    def list_analysis_jobs(self, limit: int = 20) -> list[dict]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM analysis_jobs ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            data = dict(row)
+            data["params"] = _load(data.pop("params_json"), {})
+            data["result"] = _load(data.pop("result_json"), {})
+            result.append(data)
+        return result
+
+    def get_setting(self, key: str, default: Any = None) -> Any:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT value_json FROM app_settings WHERE key = ?", (key,)
+            ).fetchone()
+        if row is None:
+            return default
+        return _load(row["value_json"], default)
+
+    def set_setting(self, key: str, value: Any) -> Any:
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO app_settings(key, value_json, updated_at)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET
+                     value_json = excluded.value_json,
+                     updated_at = excluded.updated_at""",
+                (key, _dump(value), utc_now()),
+            )
+        return value
 
     def overview(self) -> dict:
         with self.connect() as conn:

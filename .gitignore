@@ -17,6 +17,8 @@ build/
 # —— 运行时数据 ——
 backend/data/*
 !backend/data/README.md
+!backend/data/samples/
+!backend/data/samples/**
 runtime/
 *.db
 *.sqlite3

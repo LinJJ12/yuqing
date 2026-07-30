@@ -7,6 +7,7 @@ import * as echarts from 'echarts'
 const loading = ref(true)
 const error = ref('')
 const alerts = ref(null)
+const prophetHint = ref('')
 const chartRef = ref(null)
 let chart
 
@@ -17,27 +18,16 @@ const severityPill = {
   low: 'pill-default',
 }
 
-async function refresh() {
-  loading.value = true
-  error.value = ''
-  try {
-    const [a, t] = await Promise.all([fetchAlerts(50), fetchTrends(14)])
-    if (!a.ok) throw new Error(a.error?.message || '预警加载失败')
-    alerts.value = a.data
-    if (t.ok) renderTrend(t.data.series || [])
-  } catch (e) {
-    error.value = e.message || '无法连接后端'
-  } finally {
-    loading.value = false
-  }
-}
-
-function renderTrend(series) {
+function renderTrend(series, prophetMeta) {
   if (!chartRef.value) return
   if (!chart) chart = echarts.init(chartRef.value)
+  const hasProphet = series.some((s) => s.prophet_yhat != null)
   chart.setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: ['发帖量', '滑动平均'], textStyle: { color: '#475569' } },
+    legend: {
+      data: ['发帖量', '滑动平均', ...(hasProphet ? ['Prophet预测'] : [])],
+      textStyle: { color: '#475569' },
+    },
     grid: { left: 40, right: 20, top: 40, bottom: 30 },
     xAxis: {
       type: 'category',
@@ -56,19 +46,49 @@ function renderTrend(series) {
         name: '发帖量',
         type: 'bar',
         barMaxWidth: 22,
-        data: series.map((s) => s.count),
+        data: series.map((s) => (s.is_forecast ? null : s.count)),
         itemStyle: { color: '#93c5fd', borderRadius: [3, 3, 0, 0] },
       },
       {
         name: '滑动平均',
         type: 'line',
         smooth: true,
-        data: series.map((s) => s.rolling_mean),
+        data: series.map((s) => (s.is_forecast ? null : s.rolling_mean)),
         itemStyle: { color: '#1e40af' },
         lineStyle: { width: 2.5 },
       },
+      ...(hasProphet
+        ? [
+            {
+              name: 'Prophet预测',
+              type: 'line',
+              smooth: true,
+              data: series.map((s) => s.prophet_yhat),
+              itemStyle: { color: '#f59e0b' },
+              lineStyle: { width: 2, type: 'dashed' },
+            },
+          ]
+        : []),
     ],
   })
+  prophetHint.value = prophetMeta?.enabled
+    ? `Prophet 已启用，向前预测 ${prophetMeta.horizon_days || 7} 天`
+    : prophetMeta?.message || ''
+}
+
+async function refresh() {
+  loading.value = true
+  error.value = ''
+  try {
+    const [a, t] = await Promise.all([fetchAlerts(50), fetchTrends(14)])
+    if (!a.ok) throw new Error(a.error?.message || '预警加载失败')
+    alerts.value = a.data
+    if (t.ok) renderTrend(t.data.series || [], t.data.prophet)
+  } catch (e) {
+    error.value = e.message || '无法连接后端'
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(() => {
@@ -87,7 +107,7 @@ onMounted(() => {
           刷新
         </button>
       </div>
-      <p class="hint">规则：负面情感 / 敏感词命中 + 日环比发帖量突增（≥50%）。</p>
+      <p class="hint">规则：负面情感 / 敏感词命中 + 日环比发帖量突增（≥50%）。敏感词可在「设置」页修改。</p>
       <p v-if="loading" class="muted" style="margin-top: 0.75rem">加载中…</p>
       <p v-else-if="error" class="err" style="margin-top: 0.75rem">{{ error }}</p>
       <div v-else-if="alerts" class="kpi-grid" style="margin-top: 1rem; margin-bottom: 0">
@@ -111,7 +131,10 @@ onMounted(() => {
     </section>
 
     <section class="panel">
-      <div class="panel-head"><h3>热度趋势</h3></div>
+      <div class="panel-head">
+        <h3>热度趋势</h3>
+      </div>
+      <p v-if="prophetHint" class="hint">{{ prophetHint }}</p>
       <div ref="chartRef" class="chart-box" />
     </section>
 

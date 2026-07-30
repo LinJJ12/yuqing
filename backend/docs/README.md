@@ -6,6 +6,7 @@
 
 - 仅后端相关的说明（接口细节备忘、部署笔记等）。
 - 跨端约定仍以仓库 `docs/directory-structure.md` 为准。
+- 流程 / 思维导图 / 架构图见仓库 [`docs/diagrams.md`](../../docs/diagrams.md)（与 chatbot / OmniStream 同风格）。
 
 ## 禁止
 
