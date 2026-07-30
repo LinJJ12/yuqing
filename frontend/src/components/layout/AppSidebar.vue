@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   LayoutDashboard,
@@ -10,22 +10,57 @@ import {
   FileText,
   Bot,
   Settings,
-  ChevronsLeft,
-  ChevronsRight,
+  PanelLeftClose,
 } from '@lucide/vue'
 
-const route = useRoute()
-const collapsed = ref(false)
+const SIDEBAR_KEY = 'zhiwei.sidebar.collapsed'
 
-const nav = [
-  { to: '/', label: '总览', icon: LayoutDashboard, exact: true },
-  { to: '/monitor', label: '监测', icon: Radar },
-  { to: '/sentiment', label: '情感', icon: HeartPulse },
-  { to: '/topics', label: '话题', icon: Hash },
-  { to: '/alerts', label: '预警', icon: BellRing },
-  { to: '/reports', label: '报告', icon: FileText },
-  { to: '/agent', label: '助手', icon: Bot },
-  { to: '/settings', label: '设置', icon: Settings },
+function readCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const route = useRoute()
+const collapsed = ref(readCollapsed())
+
+watch(collapsed, (value) => {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, value ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+})
+
+const groups = [
+  {
+    label: '工作台',
+    items: [
+      { to: '/', label: '总览', icon: LayoutDashboard, exact: true },
+      { to: '/reports', label: '报告', icon: FileText },
+    ],
+  },
+  {
+    label: '采集',
+    items: [{ to: '/monitor', label: '监测', icon: Radar }],
+  },
+  {
+    label: '分析',
+    items: [
+      { to: '/sentiment', label: '情感', icon: HeartPulse },
+      { to: '/topics', label: '话题', icon: Hash },
+      { to: '/alerts', label: '预警', icon: BellRing },
+    ],
+  },
+  {
+    label: '工具',
+    items: [
+      { to: '/agent', label: '助手', icon: Bot },
+      { to: '/settings', label: '设置', icon: Settings },
+    ],
+  },
 ]
 
 function isActive(item) {
@@ -37,39 +72,41 @@ function isActive(item) {
 <template>
   <aside class="sidebar" :class="{ collapsed }">
     <div class="brand">
-      <div class="brand-mark" aria-hidden="true">舆</div>
-      <div v-show="!collapsed" class="brand-text">
-        <strong>Yuqing</strong>
-        <small>观众反馈分析</small>
+      <div v-show="!collapsed" class="brand-main">
+        <div class="brand-mark" aria-hidden="true">知</div>
+        <div class="brand-text">
+          <strong>知微</strong>
+          <small>舆情工作台</small>
+        </div>
       </div>
+      <button
+        type="button"
+        class="collapse-btn"
+        :aria-label="collapsed ? '展开侧栏' : '收起侧栏'"
+        :title="collapsed ? '展开菜单' : '收起菜单'"
+        @click="collapsed = !collapsed"
+      >
+        <PanelLeftClose v-if="!collapsed" :size="16" :stroke-width="1.75" />
+        <span v-else class="brand-mark brand-mark-sm" aria-hidden="true">知</span>
+      </button>
     </div>
 
     <nav class="nav" aria-label="主导航">
-      <RouterLink
-        v-for="item in nav"
-        :key="item.to"
-        :to="item.to"
-        class="nav-item"
-        :class="{ active: isActive(item) }"
-        :title="collapsed ? item.label : undefined"
-      >
-        <component :is="item.icon" :size="18" :stroke-width="1.75" class="nav-icon" />
-        <span v-show="!collapsed" class="nav-label">{{ item.label }}</span>
-      </RouterLink>
+      <div v-for="group in groups" :key="group.label" class="nav-group">
+        <div v-show="!collapsed" class="nav-group-label">{{ group.label }}</div>
+        <RouterLink
+          v-for="item in group.items"
+          :key="item.to"
+          :to="item.to"
+          class="nav-item"
+          :class="{ active: isActive(item) }"
+          :title="collapsed ? item.label : undefined"
+        >
+          <component :is="item.icon" :size="17" :stroke-width="1.75" class="nav-icon" />
+          <span v-show="!collapsed" class="nav-label">{{ item.label }}</span>
+        </RouterLink>
+      </div>
     </nav>
-
-    <div class="sidebar-foot">
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm collapse-btn"
-        :aria-label="collapsed ? '展开侧栏' : '收起侧栏'"
-        @click="collapsed = !collapsed"
-      >
-        <ChevronsLeft v-if="!collapsed" :size="16" />
-        <ChevronsRight v-else :size="16" />
-        <span v-show="!collapsed">收起</span>
-      </button>
-    </div>
   </aside>
 </template>
 
@@ -80,8 +117,10 @@ function isActive(item) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border-right: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  border-right: 1px solid var(--sidebar-border);
+  transition: width 180ms var(--ease-out);
 }
 .sidebar.collapsed {
   width: var(--sidebar-w-collapsed);
@@ -90,23 +129,36 @@ function isActive(item) {
   height: var(--topbar-h);
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0 1rem;
-  border-bottom: 1px solid var(--color-border);
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0 0.55rem 0 0.85rem;
+  border-bottom: 1px solid var(--sidebar-border);
+  overflow: hidden;
+}
+.brand-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
   overflow: hidden;
 }
 .brand-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
   color: #fff;
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   line-height: 1;
-  background: linear-gradient(145deg, #14b8a6 0%, #0f766e 75%);
+  background: linear-gradient(145deg, #14b8a6 0%, #0f766e 80%);
+}
+.brand-mark-sm {
+  width: 28px;
+  height: 28px;
+  font-size: 0.8rem;
 }
 .brand-text {
   min-width: 0;
@@ -114,59 +166,86 @@ function isActive(item) {
 }
 .brand-text strong {
   display: block;
-  font-size: 0.9375rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  color: var(--sidebar-text-active);
   white-space: nowrap;
 }
 .brand-text small {
   display: block;
-  color: var(--text-tertiary);
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: var(--sidebar-text);
+  font-size: 0.65rem;
+  font-weight: 500;
 }
+.collapse-btn {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0;
+  transition: background 120ms, color 120ms;
+}
+.collapse-btn:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text-active);
+}
+.sidebar.collapsed .brand {
+  justify-content: center;
+  padding: 0;
+}
+.sidebar.collapsed .collapse-btn:hover .brand-mark-sm {
+  filter: brightness(1.05);
+}
+
 .nav {
   flex: 1;
   min-height: 0;
-  padding: 0.75rem 0.6rem;
+  padding: 0.75rem 0.55rem;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.nav-group {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
+.nav-group-label {
+  padding: 0.1rem 0.65rem 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+}
 .nav-item {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  height: 38px;
-  padding: 0 0.75rem;
+  gap: 0.6rem;
+  height: 36px;
+  padding: 0 0.65rem;
   border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  color: var(--sidebar-text);
   text-decoration: none;
   transition: background 120ms, color 120ms;
-  cursor: pointer;
 }
 .nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text-active);
 }
 .nav-item.active {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  font-weight: 650;
+  background: var(--sidebar-active);
+  color: var(--color-primary);
+  font-weight: 600;
 }
-.nav-item.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--color-primary);
+.nav-item.active .nav-icon {
+  color: var(--color-primary);
 }
 .nav-icon {
   flex-shrink: 0;
@@ -178,24 +257,15 @@ function isActive(item) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1;
   font-size: 0.875rem;
+  line-height: 1;
+}
+.sidebar.collapsed .nav {
+  padding: 0.55rem 0.4rem;
 }
 .sidebar.collapsed .nav-item {
   justify-content: center;
   padding: 0;
-}
-.sidebar.collapsed .nav-item.active::before {
-  display: none;
-}
-.sidebar-foot {
-  padding: 0.55rem;
-  border-top: 1px solid var(--color-border);
-}
-.collapse-btn {
-  width: 100%;
-  justify-content: center;
-  border-radius: var(--radius-md);
 }
 
 @media (max-width: 800px) {
@@ -203,24 +273,34 @@ function isActive(item) {
     width: 100% !important;
     height: auto;
     border-right: none;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+  .brand {
+    height: auto;
+    min-height: 48px;
+    padding: 0.5rem 0.85rem;
+  }
+  .collapse-btn {
+    display: none;
   }
   .nav {
     flex-direction: row;
     flex-wrap: wrap;
     overflow: visible;
+    gap: 0.35rem;
+  }
+  .nav-group {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .nav-group-label {
+    display: none;
   }
   .nav-item {
     flex: 0 0 auto;
   }
-  .nav-item.active::before {
-    display: none;
-  }
   .sidebar.collapsed .nav-item {
-    padding: 0 0.75rem;
-  }
-  .collapse-btn {
-    display: none;
+    padding: 0 0.65rem;
   }
 }
 </style>

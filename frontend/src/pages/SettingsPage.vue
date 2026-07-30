@@ -100,7 +100,7 @@ onMounted(refresh)
           <span class="dot" />
           <template v-if="!online">服务离线</template>
           <template v-else-if="readiness?.demo_ready">演示全链路就绪（含主题向量）</template>
-          <template v-else-if="readiness?.demo_ready_core">核心就绪（情感/预警/报告可用；主题需 Ollama）</template>
+          <template v-else-if="readiness?.demo_ready_core">核心就绪（情感/预警/报告可用；主题需本机嵌入）</template>
           <template v-else>服务在线，但情感模型未缓存 — 请先预取模型</template>
         </div>
 
@@ -118,8 +118,8 @@ onMounted(refresh)
             <div class="kpi-value sm">{{ health?.device || '—' }}</div>
           </div>
           <div class="kpi">
-            <div class="kpi-label"><span>GPU</span></div>
-            <div class="kpi-value sm">{{ health?.gpu_name || (health?.cuda ? 'CUDA' : 'CPU') }}</div>
+            <div class="kpi-label"><span>显卡</span></div>
+            <div class="kpi-value sm">{{ health?.gpu_name || (health?.cuda ? '已启用' : '仅用处理器') }}</div>
           </div>
         </div>
 
@@ -139,7 +139,7 @@ onMounted(refresh)
 
           <article class="ready-card" :class="tone(readiness.ollama?.ok, readiness.ollama?.reachable)">
             <header>
-              <b>Ollama 嵌入</b>
+              <b>本机嵌入</b>
               <span
                 class="pill"
                 :class="readiness.ollama?.ok ? 'pill-ok' : readiness.ollama?.reachable ? 'pill-warning' : 'pill-danger'"
@@ -154,7 +154,7 @@ onMounted(refresh)
 
           <article class="ready-card" :class="tone(true, !(readiness.llm || readiness.deepseek)?.configured)">
             <header>
-              <b>云端 LLM</b>
+              <b>云端大模型</b>
               <span
                 class="pill"
                 :class="(readiness.llm || readiness.deepseek)?.configured ? 'pill-ok' : 'pill-default'"
@@ -166,7 +166,7 @@ onMounted(refresh)
             <small v-if="(readiness.llm || readiness.deepseek)?.hint">
               {{ (readiness.llm || readiness.deepseek).hint }}
             </small>
-            <small class="mono">OpenAI 兼容（火山 / 百炼 / DeepSeek…）</small>
+            <small class="mono">兼容主流云端接口（火山 / 百炼 / DeepSeek 等）</small>
           </article>
 
           <article
@@ -179,9 +179,9 @@ onMounted(refresh)
                 {{ readiness.agent?.ready ? '可用' : '未就绪' }}
               </span>
             </header>
-            <p>{{ readiness.agent?.message || '问答 / 简报需 OpenAI 兼容 Key 或 Ollama Chat' }}</p>
+            <p>{{ readiness.agent?.message || '问答 / 简报需配置云端密钥或本机对话模型' }}</p>
             <small v-if="readiness.agent?.hint">{{ readiness.agent.hint }}</small>
-            <small class="mono">优先云端 LLM，否则 Ollama Chat（非嵌入模型）</small>
+            <small class="mono">优先云端大模型，否则使用本机对话模型</small>
           </article>
         </div>
 
@@ -205,26 +205,23 @@ onMounted(refresh)
           </li>
           <li>
             <span>趋势</span>
-            <b>滑动平均 + Prophet</b>
+            <b>滑动平均 + 智能预测</b>
           </li>
           <li>
             <span>报告导出</span>
-            <b>PDF / CSV · 可选云端 LLM</b>
+            <b>文档 / 表格 · 可选云端大模型</b>
           </li>
           <li>
             <span>智能助手</span>
-            <b>问答 · 简报（OpenAI 兼容 / Ollama）</b>
+            <b>问答 · 简报（云端 / 本机）</b>
           </li>
           <li>
             <span>数据导入</span>
-            <b>JSON / CSV · 可选平台</b>
+            <b>数据文件 / 表格 · 可选平台</b>
           </li>
         </ul>
         <p class="hint" style="margin-top: 0.85rem">
-          演示前请看
-          <code>docs/model-cache.md</code>
-          与
-          <code>docs/real-data-collection.md</code>。
+          演示前请先完成模型预取与真实采集配置（见项目文档「模型缓存」「真实数据采集」）。
         </p>
       </template>
     </section>

@@ -1,6 +1,6 @@
-# Trellis 任务：合并两仓为「Python + Vue + GPU」舆情系统
+# Trellis 任务：合并两仓为「知微」舆情系统（Python + Vue + GPU）
 
-> 工作流：Triage → Plan → Gate → Execute → Verify  
+> 产品名：**知微**。工作流：Triage → Plan → Gate → Execute → Verify  
 > 环境：`yuqing/.venv`（uv + Python 3.11 + torch cu128）  
 > GPU：NVIDIA GeForce RTX 5070（需 sm_120 / CUDA 12.8+）  
 > **模型栈（已更新）**：中文三分类 BERT（GPU，低置信 uncertain）+ 人工/LLM 难例改判 + BERTopic + 滑动平均/Prophet；入库不写词典情感；不做 TextCNN / LDA / ARIMA / SIR

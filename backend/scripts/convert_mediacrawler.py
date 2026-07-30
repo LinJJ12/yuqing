@@ -1,4 +1,4 @@
-"""将 MediaCrawler 导出转为 Yuqing 可导入 JSON。
+"""将 MediaCrawler 导出转为知微可导入 JSON。
 
 支持平台（MVP）: xhs / dy / wb
 
@@ -196,7 +196,7 @@ def convert_records(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="MediaCrawler 导出 → Yuqing 导入 JSON")
+    parser = argparse.ArgumentParser(description="MediaCrawler 导出 → 知微导入 JSON")
     parser.add_argument("source", type=str, help="导出文件或目录（含 json/jsonl）")
     parser.add_argument(
         "--platform",

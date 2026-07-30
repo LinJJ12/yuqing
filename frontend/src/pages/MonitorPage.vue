@@ -2,7 +2,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Download, ExternalLink, Upload } from '@lucide/vue'
+import PageHeader from '../components/PageHeader.vue'
 import { collectBilibili, deletePosts, fetchImports, fetchOverview, fetchPosts, overridePostSentiment, uploadImport } from '../api/client'
+
+const workTab = ref('collect')
 
 const file = ref(null)
 const topic = ref('')
@@ -38,11 +41,23 @@ const cleanError = ref('')
 
 const platforms = [
   { value: 'campus', label: '样例/导入' },
-  { value: 'xhs', label: '小红书 (xhs)' },
-  { value: 'dy', label: '抖音 (dy)' },
-  { value: 'wb', label: '微博 (wb)' },
-  { value: 'bili', label: 'B站 (bili)' },
+  { value: 'xhs', label: '小红书' },
+  { value: 'dy', label: '抖音' },
+  { value: 'wb', label: '微博' },
+  { value: 'bili', label: 'B站' },
 ]
+
+const jobStatusMap = {
+  queued: '排队中',
+  running: '运行中',
+  succeeded: '成功',
+  failed: '失败',
+  pending: '等待中',
+  done: '完成',
+  completed: '完成',
+  error: '失败',
+  ok: '完成',
+}
 
 const sentimentOptions = [
   { value: 'positive', label: '正面' },
@@ -137,7 +152,7 @@ async function submit() {
   error.value = ''
   message.value = ''
   if (!file.value) {
-    error.value = '请先选择 JSON / JSONL / CSV 文件'
+    error.value = '请先选择数据文件（表格或数据包）'
     return
   }
   uploading.value = true
@@ -166,7 +181,7 @@ async function submitBili() {
   biliError.value = ''
   biliMessage.value = ''
   if (!biliKeyword.value.trim() && !biliVideo.value.trim()) {
-    biliError.value = '请填写视频 BV/链接（推荐），或展开关键词搜索'
+    biliError.value = '请填写视频链接或视频号（推荐），或展开关键词搜索'
     return
   }
   collecting.value = true
@@ -283,92 +298,150 @@ onMounted(async () => {
 
 <template>
   <div class="page monitor-page">
-    <div class="cols-2 collect-row">
-      <section class="panel">
-        <div class="panel-head">
-          <h2>B 站评论采集</h2>
-          <span class="pill pill-primary">内嵌</span>
-        </div>
-        <p class="hint">主路径：粘贴 BV / 视频链接采集评论，再到报告页看口碑。关键词搜索为可选。</p>
-        <div class="form-grid compact-form">
-          <label class="field">
-            BV / 视频链接
-            <input
-              v-model="biliVideo"
-              class="input"
-              placeholder="https://www.bilibili.com/video/BV… 或 BV1…"
-            />
-          </label>
-          <label class="field">
-            话题（可选）
-            <input v-model="biliTopic" class="input" placeholder="默认用视频标题" />
-          </label>
-          <div class="num-row">
-            <label class="field">
-              每视频评论
-              <input
-                v-model.number="biliMaxComments"
-                class="input"
-                type="number"
-                min="1"
-                max="200"
-              />
-            </label>
-            <label class="field">
-              视频数（仅关键词）
-              <input
-                v-model.number="biliMaxVideos"
-                class="input"
-                type="number"
-                min="1"
-                max="10"
-                :disabled="!showKeywordSearch"
-              />
-            </label>
-          </div>
-          <div class="more-opts">
-            <button type="button" class="btn btn-ghost btn-sm" @click="showKeywordSearch = !showKeywordSearch">
-              {{ showKeywordSearch ? '收起关键词搜索' : '展开关键词搜索（次要）' }}
-            </button>
-            <label v-if="showKeywordSearch" class="field" style="margin-top: 0.5rem">
-              关键词
-              <input v-model="biliKeyword" class="input" placeholder="例如：数码评测（无 BV 时使用）" />
-            </label>
-            <label class="check-row">
-              <input v-model="filterTitles" type="checkbox" />
-              关键词搜索时过滤娱乐向标题（黑名单 + 须命中搜索词）
-            </label>
-            <label class="check-row">
-              <input v-model="filterComments" type="checkbox" />
-              过滤空评 / 纯表情 / 刷评
-            </label>
-          </div>
+    <PageHeader title="舆情监测" subtitle="采集入库 → 浏览评论 → 跳转口碑报告" />
+
+    <section class="panel work-panel">
+      <div class="ui-tabs">
+        <div class="ui-tabs-nav" role="tablist">
           <button
             type="button"
-            class="btn btn-primary"
-            :disabled="collecting"
-            @click="submitBili"
+            class="ui-tab"
+            :class="{ active: workTab === 'collect' }"
+            role="tab"
+            @click="workTab = 'collect'"
           >
-            <Download :size="16" />
-            {{ collecting ? '采集中…' : '开始采集并入库' }}
+            视频采集
+          </button>
+          <button
+            type="button"
+            class="ui-tab"
+            :class="{ active: workTab === 'import' }"
+            role="tab"
+            @click="workTab = 'import'"
+          >
+            文件导入
+          </button>
+          <button
+            type="button"
+            class="ui-tab"
+            :class="{ active: workTab === 'clean' }"
+            role="tab"
+            @click="workTab = 'clean'"
+          >
+            数据清理
           </button>
         </div>
-        <p v-if="biliMessage" class="ok-text" style="margin-top: 0.6rem">
-          {{ biliMessage }}
-          <RouterLink
-            v-if="lastCollectedBvid"
-            class="link-out"
-            style="margin-left: 0.5rem"
-            :to="{ path: '/reports', query: { bvid: lastCollectedBvid } }"
-          >
-            查看口碑 →
-          </RouterLink>
-        </p>
-        <p v-if="biliError" class="err" style="margin-top: 0.6rem">{{ biliError }}</p>
 
-        <div class="clean-box">
-          <h3 class="clean-title">清理噪声评论</h3>
-          <p class="hint">按视频标题关键词删除误采数据（如「封校疑云」）。先预览再删除。</p>
+        <div v-show="workTab === 'collect'" class="ui-tabs-body">
+          <div class="form-grid compact-form work-form">
+            <label class="field">
+              视频号 / 链接
+              <input
+                v-model="biliVideo"
+                class="input"
+                placeholder="粘贴 B 站视频链接或视频号"
+              />
+            </label>
+            <div class="num-row">
+              <label class="field">
+                话题（可选）
+                <input v-model="biliTopic" class="input" placeholder="默认用视频标题" />
+              </label>
+              <label class="field">
+                每视频评论
+                <input
+                  v-model.number="biliMaxComments"
+                  class="input"
+                  type="number"
+                  min="1"
+                  max="200"
+                />
+              </label>
+            </div>
+            <div class="more-opts">
+              <button type="button" class="btn btn-ghost btn-sm" @click="showKeywordSearch = !showKeywordSearch">
+                {{ showKeywordSearch ? '收起关键词搜索' : '展开关键词搜索' }}
+              </button>
+              <template v-if="showKeywordSearch">
+                <label class="field">
+                  关键词
+                  <input v-model="biliKeyword" class="input" placeholder="无视频号时使用" />
+                </label>
+                <label class="field">
+                  视频数
+                  <input
+                    v-model.number="biliMaxVideos"
+                    class="input"
+                    type="number"
+                    min="1"
+                    max="10"
+                  />
+                </label>
+              </template>
+              <label class="check-row">
+                <input v-model="filterTitles" type="checkbox" />
+                过滤娱乐向标题
+              </label>
+              <label class="check-row">
+                <input v-model="filterComments" type="checkbox" />
+                过滤空评 / 刷评
+              </label>
+            </div>
+            <button type="button" class="btn btn-primary" :disabled="collecting" @click="submitBili">
+              <Download :size="16" />
+              {{ collecting ? '采集中…' : '开始采集并入库' }}
+            </button>
+          </div>
+          <p v-if="biliMessage" class="ok-text status-line">
+            {{ biliMessage }}
+            <RouterLink
+              v-if="lastCollectedBvid"
+              class="link-out"
+              :to="{ path: '/reports', query: { bvid: lastCollectedBvid } }"
+            >
+              查看口碑 →
+            </RouterLink>
+          </p>
+          <p v-if="biliError" class="err status-line">{{ biliError }}</p>
+        </div>
+
+        <div v-show="workTab === 'import'" class="ui-tabs-body">
+          <div class="form-grid compact-form work-form">
+            <div class="num-row">
+              <label class="field">
+                平台
+                <select v-model="platform" class="input">
+                  <option v-for="p in platforms" :key="p.value" :value="p.value">
+                    {{ p.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="field">
+                话题（可选）
+                <input v-model="topic" class="input" placeholder="例如：产品口碑" />
+              </label>
+            </div>
+            <label class="field">
+              文件（表格 / 数据文件）
+              <input
+                class="file-input"
+                type="file"
+                accept=".json,.jsonl,.ndjson,.csv"
+                @change="onFileChange"
+              />
+            </label>
+            <div v-if="file" class="file-name">已选：{{ file.name }}</div>
+            <button type="button" class="btn btn-primary" :disabled="uploading" @click="submit">
+              <Upload :size="16" />
+              {{ uploading ? '导入中…' : '开始导入' }}
+            </button>
+          </div>
+          <p v-if="message" class="ok-text status-line">{{ message }}</p>
+          <p v-if="error" class="err status-line">{{ error }}</p>
+        </div>
+
+        <div v-show="workTab === 'clean'" class="ui-tabs-body">
+          <p class="hint">按视频标题关键词删除误采数据。先预览再删除。</p>
           <div class="bvid-row">
             <input v-model="cleanTitle" class="input" placeholder="标题包含…" />
             <button type="button" class="btn btn-secondary btn-sm" :disabled="cleaning" @click="previewClean">
@@ -378,49 +451,11 @@ onMounted(async () => {
               {{ cleaning ? '处理中…' : '删除匹配' }}
             </button>
           </div>
-          <p v-if="cleanMessage" class="ok-text">{{ cleanMessage }}</p>
-          <p v-if="cleanError" class="err">{{ cleanError }}</p>
+          <p v-if="cleanMessage" class="ok-text status-line">{{ cleanMessage }}</p>
+          <p v-if="cleanError" class="err status-line">{{ cleanError }}</p>
         </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <h2>文件导入</h2>
-          <span class="pill pill-default">JSON / CSV</span>
-        </div>
-        <p class="hint">样例 JSON 或 MediaCrawler 转换结果均可导入。</p>
-        <div class="form-grid compact-form">
-          <label class="field">
-            平台
-            <select v-model="platform" class="input">
-              <option v-for="p in platforms" :key="p.value" :value="p.value">
-                {{ p.label }}
-              </option>
-            </select>
-          </label>
-          <label class="field">
-            话题（可选）
-            <input v-model="topic" class="input" placeholder="例如：产品口碑" />
-          </label>
-          <label class="field">
-            文件
-            <input
-              class="file-input"
-              type="file"
-              accept=".json,.jsonl,.ndjson,.csv"
-              @change="onFileChange"
-            />
-          </label>
-          <div v-if="file" class="file-name">已选：{{ file.name }}</div>
-          <button type="button" class="btn btn-primary" :disabled="uploading" @click="submit">
-            <Upload :size="16" />
-            {{ uploading ? '导入中…' : '开始导入' }}
-          </button>
-        </div>
-        <p v-if="message" class="ok-text" style="margin-top: 0.6rem">{{ message }}</p>
-        <p v-if="error" class="err" style="margin-top: 0.6rem">{{ error }}</p>
-      </section>
-    </div>
+      </div>
+    </section>
 
     <section v-if="jobs.length" class="panel jobs-panel">
       <div class="panel-head">
@@ -431,11 +466,11 @@ onMounted(async () => {
         <table class="data-table">
           <thead>
             <tr>
-              <th>时间</th>
-              <th>来源</th>
-              <th>平台</th>
-              <th>状态</th>
-              <th>入库</th>
+              <th style="width: 22%">时间</th>
+              <th style="width: 36%">来源</th>
+              <th style="width: 14%">平台</th>
+              <th style="width: 14%">状态</th>
+              <th style="width: 14%">入库</th>
             </tr>
           </thead>
           <tbody>
@@ -443,9 +478,7 @@ onMounted(async () => {
               <td>{{ job.created_at }}</td>
               <td class="ellipsis">{{ job.filename }}</td>
               <td>{{ job.platform || '—' }}</td>
-              <td>
-                <span class="pill pill-primary">{{ job.status }}</span>
-              </td>
+              <td><span class="pill pill-primary">{{ jobStatusMap[job.status] || job.status }}</span></td>
               <td>{{ job.stats?.inserted ?? '—' }}</td>
             </tr>
           </tbody>
@@ -454,75 +487,93 @@ onMounted(async () => {
     </section>
 
     <section class="panel list-panel">
-      <div class="panel-head">
-        <h2>入库结果</h2>
-        <span class="pill pill-default">当前 {{ posts.length }} / 共 {{ total }}</span>
-      </div>
-      <p class="hint">按入库时间排列。列表在框内滚动，上方采集区始终可见。</p>
-      <div class="filter-row">
-        <button
-          v-for="opt in filterOptions"
-          :key="opt.value"
-          type="button"
-          class="btn"
-          :class="listPlatform === opt.value ? 'btn-primary' : 'btn-ghost'"
-          @click="listPlatform = opt.value"
-        >
-          {{ opt.label }}
-          <span class="pill pill-default">{{ opt.count }}</span>
-        </button>
-        <label class="field field-inline">
-          条数
-          <select v-model.number="listLimit" class="input" @change="refresh">
-            <option :value="30">30</option>
-            <option :value="50">50</option>
-            <option :value="100">100</option>
-            <option :value="200">200</option>
-          </select>
-        </label>
-      </div>
-      <div v-if="posts.length" class="post-list post-scroll">
-        <article v-for="post in posts" :key="post.id" class="post-item">
-          <header class="post-meta">
-            <b>{{ post.topic || '未分类' }}</b>
-            <span class="pill pill-default">{{ platformLabel(post.platform) }}</span>
-            <select
-              class="input sentiment-select"
-              :value="post.sentiment_label || ''"
-              :disabled="sentimentBusyId === post.id"
-              title="手动改判情感"
-              @change="onSentimentOverride(post, $event.target.value)"
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <h3 class="list-title">入库结果</h3>
+          <span class="pill pill-default">{{ posts.length }} / {{ total }}</span>
+        </div>
+        <div class="toolbar-right">
+          <div class="segmented">
+            <button
+              v-for="opt in filterOptions"
+              :key="opt.value"
+              type="button"
+              :class="{ active: listPlatform === opt.value }"
+              @click="listPlatform = opt.value"
             >
-              <option value="" disabled>未分析</option>
-              <option v-for="opt in sentimentOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}{{ post.sentiment_method === 'manual' && post.sentiment_label === opt.value ? ' ·人工' : '' }}
-              </option>
-            </select>
-            <em>{{ post.author || '匿名' }}</em>
-            <em>{{ formatTime(post) }}</em>
-          </header>
-          <p v-if="videoTitle(post)" class="post-sub">来源视频：{{ videoTitle(post) }}</p>
-          <p>{{ post.text }}</p>
-          <div class="post-actions">
-            <RouterLink
-              v-if="videoBvid(post)"
-              class="link-out"
-              :to="{ path: '/reports', query: { bvid: videoBvid(post) } }"
-            >
-              查看口碑
-            </RouterLink>
-            <a
-              v-if="post.source_url"
-              class="link-out"
-              :href="post.source_url"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ExternalLink :size="14" />
-              打开原帖
-            </a>
+              {{ opt.label }} {{ opt.count }}
+            </button>
           </div>
-        </article>
+          <label class="field field-inline">
+            条数
+            <select v-model.number="listLimit" class="input" @change="refresh">
+              <option :value="30">30</option>
+              <option :value="50">50</option>
+              <option :value="100">100</option>
+              <option :value="200">200</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div v-if="posts.length" class="table-scroll">
+        <table class="data-table posts-table">
+          <thead>
+            <tr>
+              <th style="width: 10%">平台</th>
+              <th style="width: 12%">话题</th>
+              <th style="width: 34%">内容</th>
+              <th style="width: 12%">情感</th>
+              <th style="width: 12%">时间</th>
+              <th style="width: 20%">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="post in posts" :key="post.id">
+              <td>{{ platformLabel(post.platform) }}</td>
+              <td class="ellipsis" :title="post.topic || ''">{{ post.topic || '未分类' }}</td>
+              <td>
+                <div class="cell-text" :title="post.text">{{ post.text }}</div>
+                <div v-if="videoTitle(post)" class="cell-sub">{{ videoTitle(post) }}</div>
+              </td>
+              <td>
+                <select
+                  class="input sentiment-select"
+                  :value="post.sentiment_label || ''"
+                  :disabled="sentimentBusyId === post.id"
+                  @change="onSentimentOverride(post, $event.target.value)"
+                >
+                  <option value="" disabled>未分析</option>
+                  <option v-for="opt in sentimentOptions" :key="opt.value" :value="opt.value">
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </td>
+              <td class="ellipsis">{{ formatTime(post) }}</td>
+              <td>
+                <div class="row-actions">
+                  <RouterLink
+                    v-if="videoBvid(post)"
+                    class="link-out"
+                    :to="{ path: '/reports', query: { bvid: videoBvid(post) } }"
+                  >
+                    口碑
+                  </RouterLink>
+                  <a
+                    v-if="post.source_url"
+                    class="link-out"
+                    :href="post.source_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink :size="13" />
+                    原帖
+                  </a>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <p v-else class="hint">当前筛选下暂无帖子。可先在上方采集，或切换筛选。</p>
     </section>
@@ -530,9 +581,12 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.collect-row {
-  align-items: stretch;
-  margin-bottom: 0;
+.work-panel {
+  padding-top: 0.65rem;
+}
+.work-form {
+  max-width: 40rem;
+  margin-top: 0;
 }
 .compact-form {
   gap: 0.65rem;
@@ -543,10 +597,9 @@ onMounted(async () => {
   gap: 0.65rem;
 }
 .more-opts {
-  margin-top: 0.15rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
   align-items: flex-start;
 }
 .check-row {
@@ -556,90 +609,93 @@ onMounted(async () => {
   font-size: 0.82rem;
   color: var(--text-secondary);
 }
-.clean-box {
-  margin-top: 1rem;
-  padding-top: 0.85rem;
-  border-top: 1px dashed var(--color-border-strong);
-}
-.clean-title {
-  margin: 0 0 0.35rem;
-  font-size: 0.95rem;
-}
 .bvid-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
   align-items: center;
-  margin: 0.4rem 0 0.35rem;
+  margin-top: 0.55rem;
 }
 .bvid-row .input {
   flex: 1;
-  min-width: 8rem;
+  min-width: 10rem;
+  max-width: 24rem;
 }
-.jobs-panel {
-  padding-top: 0.85rem;
-  padding-bottom: 0.85rem;
+.status-line {
+  margin-top: 0.65rem;
 }
 .jobs-scroll {
-  max-height: 9.5rem;
+  max-height: 9rem;
   overflow: auto;
 }
 .ellipsis {
-  max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.list-panel .hint {
-  margin-bottom: 0.35rem;
-}
-.filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-  margin: 0.5rem 0 0.75rem;
-}
-.filter-row .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
+.list-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 650;
 }
 .field-inline {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  margin-left: auto;
   font-size: 0.85rem;
+  margin: 0;
 }
 .field-inline .input {
-  width: 5.5rem;
+  width: 5rem;
 }
-.post-sub {
-  margin: 0 0 0.35rem;
-  font-size: 0.8rem;
+.table-scroll {
+  max-height: min(58vh, 34rem);
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.posts-table {
+  table-layout: fixed;
+}
+.posts-table th,
+.posts-table td {
+  padding: 0.55rem 0.65rem;
+  white-space: normal;
+  vertical-align: top;
+}
+.cell-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+.cell-sub {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
   color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sentiment-select {
-  width: auto;
-  min-width: 5.5rem;
-  max-width: 7.5rem;
-  min-height: 1.85rem;
-  padding: 0.15rem 0.4rem;
+  width: 100%;
+  min-height: 1.9rem;
+  padding: 0.15rem 0.35rem;
   font-size: 0.8rem;
 }
-.post-actions {
-  margin-top: 0.45rem;
+.row-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.55rem;
   align-items: center;
 }
 .link-out {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-primary);
   text-decoration: none;
@@ -647,16 +703,12 @@ onMounted(async () => {
 .link-out:hover {
   text-decoration: underline;
 }
-.post-scroll {
-  max-height: min(52vh, 28rem);
-  overflow: auto;
-  padding-right: 0.25rem;
-  border-top: 1px solid var(--color-border);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-}
 @media (max-width: 900px) {
-  .post-scroll {
-    max-height: 40vh;
+  .num-row {
+    grid-template-columns: 1fr;
+  }
+  .table-scroll {
+    max-height: 45vh;
   }
 }
 </style>

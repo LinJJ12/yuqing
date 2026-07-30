@@ -1,10 +1,10 @@
-# frontend/ — Vue 3 舆情工作台
+# frontend/ — 知微 Vue 3 工作台
 
 上级规范：[docs/directory-structure.md](../docs/directory-structure.md)
 
 ## 职责
 
-- 舆情工作台 UI：总览、监测、情感、主题、预警、报告、助手、设置。
+- **知微** 舆情工作台 UI：总览、监测、情感、主题、预警、报告、助手、设置。
 - 经 Vite 代理访问后端 `/api`（默认 `127.0.0.1:8001`）。
 
 ```text

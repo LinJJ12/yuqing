@@ -12,7 +12,7 @@
 | 脚本 | 说明 |
 |------|------|
 | `generate_sample_data.py` | 写入 `backend/data/samples/campus_sample.json` |
-| `convert_mediacrawler.py` | MediaCrawler 导出 → Yuqing 可导入 JSON |
+| `convert_mediacrawler.py` | MediaCrawler 导出 → 知微可导入 JSON |
 | `prefetch_models.py` | 预取情感模型到本机 HF 缓存（演示防翻车） |
 | `smoke_test.py` | 规范化 / API / CUDA 等断言 |
 

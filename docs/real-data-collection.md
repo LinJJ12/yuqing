@@ -1,7 +1,7 @@
 # 真实数据采集
 
 > 一期：文件导入。二期：外挂 MediaCrawler + **内嵌 B 站评论采集**。  
-> 产品定位：**不局限于校园**——以 B 站视频评论口碑 / 多平台舆情为主；`campus` 平台码仅为通用导入与历史样例。  
+> 产品定位：**知微** — 不局限于校园——以 B 站视频评论口碑 / 多平台舆情为主；`campus` 平台码仅为通用导入与历史样例。  
 > 系统内**不**内嵌小红书/抖音二维码登录台。演示前请先看 [`model-cache.md`](./model-cache.md)。
 
 ---
@@ -155,9 +155,9 @@ cd MediaCrawler
 | `KEYWORDS` | 与场景相关的词，如 `评测,探店,开箱` |
 | `SAVE_DATA_OPTION` | `json` 或 `jsonl` |
 
-### 2. 转换为 Yuqing 格式
+### 2. 转换为知微导入格式
 
-在 **yuqing 仓库根**：
+在 **仓库根**（目录名可能仍为 `yuqing`）：
 
 ```powershell
 uv run python backend/scripts/convert_mediacrawler.py D:\MediaCrawler\data\xhs --platform xhs

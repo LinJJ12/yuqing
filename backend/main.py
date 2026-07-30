@@ -1,4 +1,4 @@
-"""Yuqing backend 入口。
+"""知微 backend 入口。
 
 用法（仓库根目录，沿用根 .venv）：
   uv run python backend/main.py
@@ -25,7 +25,7 @@ from src.config.settings import settings
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Yuqing opinion / audience-feedback API")
+    parser = argparse.ArgumentParser(description="知微 opinion / audience-feedback API")
     parser.add_argument("--host", default=settings.host)
     parser.add_argument("--port", type=int, default=settings.port)
     parser.add_argument("--reload", action="store_true")

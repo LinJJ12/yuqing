@@ -260,7 +260,7 @@ def build_report_summary(*, with_prophet: bool = True) -> dict[str, Any]:
     trend_pack = daily_volume_series(14, use_prophet=with_prophet)
     alerts = detect_alerts()
     return {
-        "generated_for": "舆情日报（自动）",
+        "generated_for": "知微日报（自动）",
         "school_keywords": settings.default_school_keywords,
         "alert_keywords": get_alert_keywords(),
         "overview": overview,

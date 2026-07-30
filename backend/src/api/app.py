@@ -29,7 +29,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="社交媒体舆情监测：BERT 情感 + BERTopic 主题 + 趋势预警；支持 B 站评论口碑分析（Python + Vue + GPU）",
+        description="知微：社交媒体舆情监测（BERT 情感 + BERTopic 主题 + 趋势预警；支持 B 站评论口碑分析）",
         lifespan=lifespan,
     )
     app.add_middleware(

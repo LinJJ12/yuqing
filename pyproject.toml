@@ -1,7 +1,7 @@
 [project]
-name = "yuqing"
+name = "zhiwei"
 version = "0.1.0"
-description = "社交媒体舆情 / 观众反馈分析（Python + Vue + GPU；B 站评论等）"
+description = "知微 — 社交媒体舆情 / 观众反馈分析（Python + Vue + GPU；B 站评论等）"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [

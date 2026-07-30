@@ -11,13 +11,19 @@ defineProps({
 const emit = defineEmits(['refresh'])
 
 const route = useRoute()
-const title = computed(() => route.meta.title || '舆情分析')
+const title = computed(() => route.meta.title || '知微')
+const subtitle = computed(() => route.meta.subtitle || '')
 </script>
 
 <template>
   <header class="topbar">
     <div class="title-wrap">
-      <h1 class="title">{{ title }}</h1>
+      <div class="crumb">
+        <span class="crumb-root">知微</span>
+        <span class="crumb-sep" aria-hidden="true">/</span>
+        <span class="crumb-current">{{ title }}</span>
+      </div>
+      <p v-if="subtitle" class="subtitle">{{ subtitle }}</p>
     </div>
     <div class="actions">
       <span
@@ -54,25 +60,43 @@ const title = computed(() => route.meta.title || '舆情分析')
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0 1.75rem;
+  padding: 0 1.25rem;
   border-bottom: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(8px);
 }
 .title-wrap {
   min-width: 0;
 }
-.title {
-  margin: 0;
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   min-width: 0;
-  font-size: 0.9375rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: 0.875rem;
   line-height: 1.2;
+}
+.crumb-root {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.crumb-sep {
+  color: var(--color-border-strong);
+}
+.crumb-current {
+  color: var(--text-primary);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--text-primary);
 }
 .actions {
   display: flex;

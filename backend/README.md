@@ -1,4 +1,4 @@
-# backend/ — FastAPI 舆情分析 BFF
+# backend/ — 知微 FastAPI BFF
 
 分层约定对齐桌面旁路仓 **chatbot / OmniStream**（前后端分离、`api` 薄入口、能力在 `services`、落盘在 `storage`）。
 

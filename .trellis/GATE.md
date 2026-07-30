@@ -1,6 +1,7 @@
-# Gate — 合并开工确认
+# Gate — 知微合并开工确认
 
-- [x] 场景：校园舆情
+- [x] 产品名：知微
+- [x] 场景：校园舆情（可选演示；主场景为多平台/B 站口碑）
 - [x] 前端：Vue 3 + Vite + ECharts
 - [x] 存储：一期 SQLite
 - [x] 情感：词典快筛 + 中文 BERT（GPU）；OpenAI 兼容 LLM 仅可选报告摘要 / Agent

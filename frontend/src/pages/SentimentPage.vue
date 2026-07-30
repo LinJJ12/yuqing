@@ -2,10 +2,12 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import { Play, RotateCcw, Sparkles } from '@lucide/vue'
+import PageHeader from '../components/PageHeader.vue'
 import {
   createAnalysisJob,
   fetchAnalysisJob,
   fetchAnalysisJobs,
+  fetchPosts,
   fetchReviewPosts,
   fetchSentimentStats,
   llmReviewSentiment,
@@ -13,6 +15,9 @@ import {
   previewSentiment,
   runSentiment,
 } from '../api/client'
+
+const toolTab = ref('review')
+const sentimentFilter = ref('all') // all | positive | neutral | negative | uncertain
 
 const loading = ref(false)
 const jobLoading = ref(false)
@@ -41,7 +46,7 @@ const labelMap = {
 const methodMap = {
   bert: '模型',
   manual: '人工',
-  llm: 'LLM',
+  llm: '大模型',
   lexicon: '词典',
   provided: '导入',
 }
@@ -70,6 +75,41 @@ const staleHint = computed(() => {
   if (!stats.value?.model_stale) return ''
   return `检测到情感模型已更换（当前 ${stats.value.model_id || ''}），点「分析待处理」或「全量重跑」即可用新模型覆盖旧标签。`
 })
+
+const reviewFilterTabs = computed(() => {
+  const items = reviewPosts.value || []
+  const countOf = (label) => items.filter((p) => (p.sentiment_label || 'unknown') === label).length
+  return [
+    { value: 'all', label: '全部', count: items.length },
+    { value: 'positive', label: '正面', count: countOf('positive') },
+    { value: 'neutral', label: '中性', count: countOf('neutral') },
+    { value: 'negative', label: '负面', count: countOf('negative') },
+    { value: 'uncertain', label: '不确定', count: countOf('uncertain') },
+  ]
+})
+
+const filteredReviewPosts = computed(() => {
+  const items = reviewPosts.value || []
+  if (sentimentFilter.value === 'all') return items
+  return items.filter((p) => (p.sentiment_label || 'unknown') === sentimentFilter.value)
+})
+
+const filteredSample = computed(() => {
+  const items = sample.value || []
+  if (sentimentFilter.value === 'all') return items
+  return items.filter((p) => (p.sentiment_label || 'unknown') === sentimentFilter.value)
+})
+
+function setSentimentFilter(value) {
+  sentimentFilter.value = value
+}
+
+function sentimentPillClass(label) {
+  if (label === 'positive') return 'pill-success'
+  if (label === 'negative') return 'pill-danger'
+  if (label === 'uncertain') return 'pill-warning'
+  return 'pill-default'
+}
 
 async function refreshJobs() {
   const res = await fetchAnalysisJobs(8)
@@ -128,42 +168,58 @@ function renderChart() {
     const bucket = row.method === 'bert' ? bert : lexicon
     if (row.label in bucket) bucket[row.label] += row.count
   }
+  const colors = {
+    positive: '#16a34a',
+    neutral: '#0f766e',
+    negative: '#dc2626',
+    uncertain: '#d97706',
+  }
+  const soft = {
+    positive: '#86efac',
+    neutral: '#5eead4',
+    negative: '#fca5a5',
+    uncertain: '#fcd34d',
+  }
+  const cats = ['positive', 'neutral', 'negative', 'uncertain']
   chart.setOption({
-    color: ['#18181b', '#a1a1aa'],
     tooltip: { trigger: 'axis' },
     legend: {
       data: ['模型分析', '词典快筛'],
       top: 0,
       left: 'center',
-      textStyle: { color: '#52525b' },
+      textStyle: { color: '#64748b' },
     },
     grid: { left: 48, right: 20, top: 48, bottom: 40 },
     xAxis: {
       type: 'category',
       data: ['正面', '中性', '负面', '不确定'],
-      axisLine: { lineStyle: { color: '#e4e4e7' } },
-      axisLabel: { color: '#71717a', margin: 12 },
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLabel: { color: '#64748b', margin: 12 },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      splitLine: { lineStyle: { color: '#f4f4f5' } },
-      axisLabel: { color: '#71717a' },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#64748b' },
     },
     series: [
       {
         name: '模型分析',
         type: 'bar',
         barMaxWidth: 28,
-        data: [bert.positive, bert.neutral, bert.negative, bert.uncertain],
-        itemStyle: { color: '#18181b', borderRadius: [4, 4, 0, 0] },
+        data: cats.map((k) => ({
+          value: bert[k],
+          itemStyle: { color: colors[k], borderRadius: [4, 4, 0, 0] },
+        })),
       },
       {
         name: '词典快筛',
         type: 'bar',
         barMaxWidth: 28,
-        data: [lexicon.positive, lexicon.neutral, lexicon.negative, lexicon.uncertain],
-        itemStyle: { color: '#a1a1aa', borderRadius: [4, 4, 0, 0] },
+        data: cats.map((k) => ({
+          value: lexicon[k],
+          itemStyle: { color: soft[k], borderRadius: [4, 4, 0, 0] },
+        })),
       },
     ],
   })
@@ -180,8 +236,29 @@ async function refreshStats() {
 async function refreshReview() {
   reviewLoading.value = true
   try {
-    const res = await fetchReviewPosts(40)
-    if (res.ok) reviewPosts.value = res.data.items || []
+    const settled = await Promise.allSettled([
+      fetchReviewPosts(80),
+      fetchPosts({ label: 'positive', limit: 30, order: 'fetched' }),
+      fetchPosts({ label: 'neutral', limit: 30, order: 'fetched' }),
+      fetchPosts({ label: 'negative', limit: 30, order: 'fetched' }),
+      fetchPosts({ label: 'uncertain', limit: 30, order: 'fetched' }),
+    ])
+    const byId = new Map()
+    for (const item of settled) {
+      if (item.status !== 'fulfilled' || !item.value?.ok) continue
+      for (const p of item.value.data?.items || []) {
+        byId.set(p.id, p)
+      }
+    }
+    reviewPosts.value = [...byId.values()].sort((a, b) => {
+      const ca = Number(a.sentiment_confidence)
+      const cb = Number(b.sentiment_confidence)
+      const va = Number.isFinite(ca) ? ca : 1
+      const vb = Number.isFinite(cb) ? cb : 1
+      return va - vb
+    })
+  } catch (e) {
+    error.value = e.message || '加载评论失败'
   } finally {
     reviewLoading.value = false
   }
@@ -198,7 +275,7 @@ async function onManualOverride(post, label) {
       return
     }
     const idx = reviewPosts.value.findIndex((p) => p.id === post.id)
-    if (idx >= 0) reviewPosts.value[idx] = res.data
+    if (idx >= 0) reviewPosts.value[idx] = res.data?.id ? res.data : { ...post, ...res.data }
     message.value = `已人工改判 #${post.id} → ${labelMap[label] || label}`
     await refreshStats()
   } catch (e) {
@@ -211,21 +288,21 @@ async function onManualOverride(post, label) {
 async function onLlmReview(post) {
   reviewBusyId.value = post.id
   error.value = ''
-  message.value = `正在 LLM 复判 #${post.id}…`
+  message.value = `正在智能复判 #${post.id}…`
   try {
     const res = await llmReviewSentiment({ post_id: post.id, apply: true })
     if (!res.ok) {
-      error.value = res.error?.message || 'LLM 复判失败'
+      error.value = res.error?.message || '智能复判失败'
       return
     }
     const updated = res.data.post || res.data
     const idx = reviewPosts.value.findIndex((p) => p.id === post.id)
     if (idx >= 0 && updated?.id) reviewPosts.value[idx] = updated
     const lab = res.data.sentiment_label
-    message.value = `LLM 复判 #${post.id} → ${labelMap[lab] || lab}${res.data.reason ? `（${res.data.reason}）` : ''}`
+    message.value = `智能复判 #${post.id} → ${labelMap[lab] || lab}${res.data.reason ? `（${res.data.reason}）` : ''}`
     await refreshStats()
   } catch (e) {
-    error.value = e.message || 'LLM 复判失败'
+    error.value = e.message || '智能复判失败'
   } finally {
     reviewBusyId.value = null
   }
@@ -269,6 +346,10 @@ async function onPreview() {
   }
 }
 
+function onResize() {
+  chart?.resize()
+}
+
 onMounted(async () => {
   try {
     await refreshStats()
@@ -277,10 +358,13 @@ onMounted(async () => {
   } catch {
     error.value = '无法连接后端'
   }
-  window.addEventListener('resize', () => chart?.resize())
+  window.addEventListener('resize', onResize)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  chart?.dispose()
+  chart = null
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
@@ -290,15 +374,8 @@ onUnmounted(() => {
 
 <template>
   <div class="page">
-    <section class="panel">
-      <div class="panel-head">
-        <h2>情感分析</h2>
-      </div>
-      <p class="hint">
-        默认微博域三分类模型，输出正面 / 中性 / 负面（低置信为不确定）。入库不再写词典情感；采集后会自动排队 BERT。也可提交后台任务异步执行。
-      </p>
-      <p v-if="staleHint" class="warn-text">{{ staleHint }}</p>
-      <div class="actions">
+    <PageHeader title="情感分析" subtitle="正面 / 中性 / 负面 · 低置信为不确定">
+      <template #actions>
         <button type="button" class="btn btn-primary" :disabled="loading || jobLoading" @click="onRun(true)">
           <Play :size="16" />
           分析待处理
@@ -311,140 +388,234 @@ onUnmounted(() => {
           <Sparkles :size="16" />
           后台任务
         </button>
-      </div>
-      <p v-if="message" class="ok-text">{{ message }}</p>
-      <p v-if="error" class="err">{{ error }}</p>
-      <div v-if="stats" class="kpi-grid" style="margin-top: 1rem">
-        <div class="kpi">
-          <div class="kpi-label"><span>总量</span></div>
-          <div class="kpi-value">{{ stats.total }}</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label"><span>已分析</span></div>
-          <div class="kpi-value ok">{{ stats.bert_done }}</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label"><span>待处理</span></div>
-          <div class="kpi-value warn">{{ stats.pending }}</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label"><span>不确定</span></div>
-          <div class="kpi-value">{{ stats.uncertain ?? 0 }}</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label"><span>进度</span></div>
-          <div class="kpi-value">{{ bertProgress }}</div>
-        </div>
-      </div>
-      <div ref="chartRef" class="chart-box" style="margin-top: 0.5rem" />
-    </section>
+      </template>
+    </PageHeader>
 
-    <section v-if="jobs.length" class="panel">
-      <div class="panel-head"><h3>最近任务</h3></div>
-      <ul class="stack-list">
-        <li v-for="job in jobs" :key="job.id">
-          <span>{{ job.kind }} · {{ jobStatusMap[job.status] || job.status }} · {{ job.created_at }}</span>
-          <b>{{ job.id.slice(0, 8) }}</b>
-        </li>
-      </ul>
-    </section>
+    <p v-if="staleHint" class="warn-text" style="margin-top: 0; margin-bottom: 0.75rem">{{ staleHint }}</p>
+    <p v-if="message" class="ok-text" style="margin: 0 0 0.5rem">{{ message }}</p>
+    <p v-if="error" class="err" style="margin: 0 0 0.5rem">{{ error }}</p>
+
+    <div v-if="stats" class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label"><span>总量</span></div>
+        <div class="kpi-value">{{ stats.total }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span>已分析</span></div>
+        <div class="kpi-value ok">{{ stats.bert_done }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span>待处理</span></div>
+        <div class="kpi-value warn">{{ stats.pending }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span>不确定</span></div>
+        <div class="kpi-value">{{ stats.uncertain ?? 0 }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span>进度</span></div>
+        <div class="kpi-value">{{ bertProgress }}</div>
+      </div>
+    </div>
 
     <section class="panel">
       <div class="panel-head">
-        <h3>单句预览</h3>
+        <h3>情感分布</h3>
       </div>
-      <textarea v-model="previewText" class="textarea" rows="3" />
-      <button type="button" class="btn btn-primary" style="margin-top: 0.65rem" :disabled="loading" @click="onPreview">
-        <Sparkles :size="16" />
-        预测
-      </button>
-      <p v-if="previewResult" class="preview-box">
-        <span class="pill pill-primary">
-          {{ labelMap[previewResult.sentiment_label] || previewResult.sentiment_label }}
-        </span>
-        · 置信度 {{ previewResult.confidence }}
-        · {{ previewResult.elapsed_ms }} ms
-        <template v-if="previewResult.scores">
-          <br />
-          分数：正 {{ previewResult.scores.positive }} /
-          中 {{ previewResult.scores.neutral }} /
-          负 {{ previewResult.scores.negative }}
-        </template>
-      </p>
+      <div ref="chartRef" class="chart-box" />
     </section>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h3>难例改判</h3>
-        <button type="button" class="btn btn-ghost" :disabled="reviewLoading" @click="refreshReview">
-          刷新
-        </button>
-      </div>
-      <p class="hint">
-        优先列出不确定 / 低置信评论。可手动改判，或一键 LLM 复判；人工与 LLM 结果不会被后续 BERT 覆盖。
-      </p>
-      <div v-if="reviewPosts.length" class="post-list">
-        <article v-for="item in reviewPosts" :key="item.id" class="post-item">
-          <header class="post-meta">
-            <b>#{{ item.id }}</b>
-            <span class="pill pill-default">
-              {{ labelMap[item.sentiment_label] || item.sentiment_label || '未标注' }}
-            </span>
-            <span class="pill pill-default">
-              {{ methodMap[item.sentiment_method] || item.sentiment_method || '—' }}
-            </span>
-            <em v-if="item.sentiment_confidence != null">置信 {{ item.sentiment_confidence }}</em>
-          </header>
-          <p>{{ item.text }}</p>
-          <div class="review-actions">
-            <select
-              class="input review-select"
-              :value="item.sentiment_label || ''"
-              :disabled="reviewBusyId === item.id"
-              @change="onManualOverride(item, $event.target.value)"
-            >
-              <option disabled value="">改判为…</option>
-              <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-            <button
-              type="button"
-              class="btn btn-secondary"
-              :disabled="reviewBusyId === item.id"
-              @click="onLlmReview(item)"
-            >
-              LLM 复判
+    <section class="panel tools-panel">
+      <div class="ui-tabs">
+        <div class="ui-tabs-nav" role="tablist">
+          <button
+            type="button"
+            class="ui-tab"
+            :class="{ active: toolTab === 'review' }"
+            @click="toolTab = 'review'"
+          >
+            难例改判
+          </button>
+          <button
+            type="button"
+            class="ui-tab"
+            :class="{ active: toolTab === 'preview' }"
+            @click="toolTab = 'preview'"
+          >
+            单句预览
+          </button>
+          <button
+            type="button"
+            class="ui-tab"
+            :class="{ active: toolTab === 'jobs' }"
+            @click="toolTab = 'jobs'"
+          >
+            最近任务
+          </button>
+          <button
+            v-if="sample.length"
+            type="button"
+            class="ui-tab"
+            :class="{ active: toolTab === 'sample' }"
+            @click="toolTab = 'sample'"
+          >
+            本次样例
+          </button>
+        </div>
+
+        <div v-show="toolTab === 'review'" class="ui-tabs-body">
+          <div class="toolbar" style="margin-bottom: 0.65rem">
+            <p class="hint" style="margin: 0">
+              按情感切换浏览；人工与智能复判结果不会被后续模型覆盖。
+            </p>
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="reviewLoading" @click="refreshReview">
+              刷新
             </button>
           </div>
-        </article>
-      </div>
-      <p v-else class="hint">{{ reviewLoading ? '加载中…' : '暂无待复核帖子' }}</p>
-    </section>
 
-    <section v-if="sample.length" class="panel">
-      <div class="panel-head">
-        <h3>本次样例</h3>
-      </div>
-      <div class="post-list">
-        <article v-for="item in sample" :key="item.id" class="post-item">
-          <header class="post-meta">
-            <b>{{ labelMap[item.sentiment_label] || item.sentiment_label }}</b>
-            <span class="pill pill-default">{{ item.confidence }}</span>
-          </header>
-          <p>{{ item.text }}</p>
-        </article>
+          <div class="segmented sentiment-filter" role="tablist">
+            <button
+              v-for="tab in reviewFilterTabs"
+              :key="tab.value"
+              type="button"
+              :class="{ active: sentimentFilter === tab.value }"
+              @click="setSentimentFilter(tab.value)"
+            >
+              {{ tab.label }}
+              <em>{{ tab.count }}</em>
+            </button>
+          </div>
+
+          <div v-if="filteredReviewPosts.length" class="post-list">
+            <article v-for="item in filteredReviewPosts" :key="item.id" class="post-item">
+              <header class="post-meta">
+                <b>#{{ item.id }}</b>
+                <span class="pill" :class="sentimentPillClass(item.sentiment_label)">
+                  {{ labelMap[item.sentiment_label] || item.sentiment_label || '未标注' }}
+                </span>
+                <span class="pill pill-default">
+                  {{ methodMap[item.sentiment_method] || item.sentiment_method || '—' }}
+                </span>
+                <em v-if="item.sentiment_confidence != null">置信 {{ item.sentiment_confidence }}</em>
+              </header>
+              <p>{{ item.text }}</p>
+              <div class="review-actions">
+                <select
+                  class="input review-select"
+                  :value="item.sentiment_label || ''"
+                  :disabled="reviewBusyId === item.id"
+                  @change="onManualOverride(item, $event.target.value)"
+                >
+                  <option disabled value="">改判为…</option>
+                  <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">
+                    {{ opt.label }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  :disabled="reviewBusyId === item.id"
+                  @click="onLlmReview(item)"
+                >
+                  智能复判
+                </button>
+              </div>
+            </article>
+          </div>
+          <p v-else class="hint">
+            {{
+              reviewLoading
+                ? '加载中…'
+                : sentimentFilter === 'all'
+                  ? '暂无待浏览帖子'
+                  : `当前筛选下暂无「${labelMap[sentimentFilter]}」帖子`
+            }}
+          </p>
+        </div>
+
+        <div v-show="toolTab === 'preview'" class="ui-tabs-body">
+          <textarea v-model="previewText" class="textarea" rows="3" />
+          <button type="button" class="btn btn-primary" style="margin-top: 0.65rem" :disabled="loading" @click="onPreview">
+            <Sparkles :size="16" />
+            预测
+          </button>
+          <p v-if="previewResult" class="preview-box">
+            <span class="pill pill-primary">
+              {{ labelMap[previewResult.sentiment_label] || previewResult.sentiment_label }}
+            </span>
+            · 置信度 {{ previewResult.confidence }}
+            · {{ previewResult.elapsed_ms }} ms
+            <template v-if="previewResult.scores">
+              <br />
+              分数：正 {{ previewResult.scores.positive }} /
+              中 {{ previewResult.scores.neutral }} /
+              负 {{ previewResult.scores.negative }}
+            </template>
+          </p>
+        </div>
+
+        <div v-show="toolTab === 'jobs'" class="ui-tabs-body">
+          <ul v-if="jobs.length" class="stack-list">
+            <li v-for="job in jobs" :key="job.id">
+              <span>{{ job.kind }} · {{ jobStatusMap[job.status] || job.status }} · {{ job.created_at }}</span>
+              <b>{{ job.id.slice(0, 8) }}</b>
+            </li>
+          </ul>
+          <p v-else class="hint">暂无后台任务。</p>
+        </div>
+
+        <div v-show="toolTab === 'sample' && sample.length" class="ui-tabs-body">
+          <div class="segmented sentiment-filter" style="margin-bottom: 0.75rem">
+            <button
+              type="button"
+              :class="{ active: sentimentFilter === 'all' }"
+              @click="setSentimentFilter('all')"
+            >
+              全部
+            </button>
+            <button
+              v-for="opt in labelOptions"
+              :key="'s-' + opt.value"
+              type="button"
+              :class="{ active: sentimentFilter === opt.value }"
+              @click="setSentimentFilter(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <div v-if="filteredSample.length" class="post-list">
+            <article v-for="item in filteredSample" :key="item.id" class="post-item">
+              <header class="post-meta">
+                <b>{{ labelMap[item.sentiment_label] || item.sentiment_label }}</b>
+                <span class="pill pill-default">{{ item.confidence }}</span>
+              </header>
+              <p>{{ item.text }}</p>
+            </article>
+          </div>
+          <p v-else class="hint">当前筛选下暂无样例。</p>
+        </div>
       </div>
     </section>
   </div>
 </template>
 
 <style scoped>
-.actions {
-  display: flex;
-  gap: 0.6rem;
-  margin: 0.85rem 0;
+.tools-panel {
+  padding-top: 0.65rem;
+}
+.sentiment-filter {
+  margin-bottom: 0.85rem;
   flex-wrap: wrap;
+}
+.sentiment-filter em {
+  font-style: normal;
+  margin-left: 0.2rem;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+.sentiment-filter button.active em {
+  color: var(--color-primary);
 }
 .preview-box {
   margin-top: 0.75rem;

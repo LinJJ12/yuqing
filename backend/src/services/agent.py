@@ -104,7 +104,7 @@ def build_opinion_context(limit_posts: int = 8, *, bvid: str | None = None) -> d
 
 def _context_prompt(ctx: dict[str, Any]) -> str:
     return (
-        "以下是舆情系统当前库内统计与样例（只读，请基于此回答，勿编造库外事实）：\n"
+        "以下是知微舆情系统当前库内统计与样例（只读，请基于此回答，勿编造库外事实）：\n"
         + json.dumps(ctx, ensure_ascii=False, indent=2)
     )
 
@@ -225,7 +225,7 @@ def agent_chat(
         )
     else:
         system = (
-            "你是社交媒体舆情与观众反馈分析助手。根据提供的统计与样例回答用户问题，"
+            "你是知微助手，擅长社交媒体舆情与观众反馈分析。根据提供的统计与样例回答用户问题，"
             "语气客观简洁，可给 1～3 条可执行建议。若数据不足请明确说明。"
         )
     user = _context_prompt(ctx) + f"\n\n用户问题：{q}"
@@ -273,7 +273,7 @@ def agent_brief(*, bvid: str | None = None) -> dict[str, Any]:
     else:
         summary = build_report_summary(with_prophet=False)
         system = (
-            "你是舆情简报作者。请写一篇 250～450 字的中文简报，"
+            "你是知微简报作者。请写一篇 250～450 字的中文简报，"
             "结构包含：总体态势、主要话题、风险与预警、建议措施。"
             "只基于给定数据，不要编造具体人名或未出现的事件。"
         )

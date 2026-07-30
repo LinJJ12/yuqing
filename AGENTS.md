@@ -1,6 +1,6 @@
-# Yuqing 协作入口
+# 知微 协作入口
 
-不局限于校园：以 B 站评论口碑 / 多平台舆情为主，校园样例为可选演示数据。
+产品名：**知微**。不局限于校园：以 B 站评论口碑 / 多平台舆情为主，校园样例为可选演示数据。
 
 - 目录约定：[`docs/directory-structure.md`](docs/directory-structure.md)（含 API 垂直表与忽略路径说明）
 - 流程与架构图：[`docs/diagrams.md`](docs/diagrams.md)

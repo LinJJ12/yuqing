@@ -78,7 +78,7 @@ def export_csv(with_ai: bool = Query(default=False)):
         content=content,
         media_type="text/csv; charset=utf-8",
         headers={
-            "Content-Disposition": 'attachment; filename="yuqing-report.csv"'
+            "Content-Disposition": 'attachment; filename="zhiwei-report.csv"'
         },
     )
 
@@ -98,6 +98,6 @@ def export_pdf(with_ai: bool = Query(default=False)):
         content=content,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": 'attachment; filename="yuqing-report.pdf"'
+            "Content-Disposition": 'attachment; filename="zhiwei-report.pdf"'
         },
     )

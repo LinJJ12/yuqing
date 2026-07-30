@@ -125,13 +125,13 @@ onMounted(async () => {
         </span>
       </div>
       <p class="hint">
-        可填 BV 限定「单视频观众反馈」；留空则用全局库统计。优先云端 OpenAI 兼容接口，否则本机 Ollama Chat。
+        可填视频号限定「单视频观众反馈」；留空则用全局库统计。优先云端大模型，否则使用本机对话模型。
         {{ status?.message }}
       </p>
       <p v-if="status?.hint" class="hint">{{ status.hint }}</p>
       <label class="field">
-        BV / 链接（可选，限定单视频）
-        <input v-model="bvid" class="input" placeholder="留空=全局；填 BV 则按该视频评论回答" />
+        视频号 / 链接（可选，限定单视频）
+        <input v-model="bvid" class="input" placeholder="留空=全局；填写后按该视频评论回答" />
       </label>
       <p v-if="message" class="ok-text">{{ message }}</p>
       <p v-if="error" class="err">{{ error }}</p>
@@ -196,7 +196,7 @@ onMounted(async () => {
         </div>
       </div>
       <p class="hint">
-        {{ bvid.trim() ? '将基于该 BV 评论生成观众反馈简报。' : '全局简报：态势 / 话题 / 风险 / 建议。' }}
+        {{ bvid.trim() ? '将基于该视频评论生成观众反馈简报。' : '全局简报：态势 / 话题 / 风险 / 建议。' }}
       </p>
       <h4 v-if="briefMeta?.title">{{ briefMeta.title }}</h4>
       <p v-if="brief" class="answer-text brief">{{ brief }}</p>
