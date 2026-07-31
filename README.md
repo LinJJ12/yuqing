@@ -52,14 +52,15 @@
 
 ```
 知微
-├── frontend/          Vue 3 + Vite（总览 · 监测 · 情感 · 主题 · 预警 · 报告 · 助手 · 设置）
+├── frontend/          Vue 3 + Vite（总览 · 监测 · 入库 · 洞察 · 预警 · 报告 · 助手 · 设置）
 ├── backend/           FastAPI BFF
 │   ├── api/           HTTP 边界（与 frontend/src/api 垂直对齐）
 │   ├── services/      采集 · 情感 · 主题 · 预警 · 报告 · Agent · 就绪探测
 │   ├── storage/       SQLite
 │   └── config/        settings · CUDA · Ollama · Cookie（密钥只出自此处）
 ├── docs/              PRD · 定位 · 目录约定 · 架构图 · 采集 / 模型
-├── .trellis/          合并方案与阶段门禁
+├── .trellis/          Trellis 工作流 + 合并历史 Gate
+├── .cursor/           Trellis → Cursor 命令 / Agent
 └── vendor/            第三方参考（本地，勿 import 进生产路径）
 ```
 

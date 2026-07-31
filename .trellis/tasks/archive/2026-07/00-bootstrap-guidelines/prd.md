@@ -21,8 +21,8 @@ the rest conversationally.
 
 ## Status (update the checkboxes as you complete each item)
 
-- [ ] Fill backend guidelines
-- [ ] Add code examples
+- [x] Fill backend guidelines
+- [x] Add code examples
 
 ---
 
@@ -33,11 +33,11 @@ the rest conversationally.
 
 | File | What to document |
 |------|------------------|
-| `.trellis/spec/backend/directory-structure.md` | Where different file types go (routes, services, utils) |
-| `.trellis/spec/backend/database-guidelines.md` | ORM, migrations, query patterns, naming conventions |
-| `.trellis/spec/backend/error-handling.md` | How errors are caught, logged, and returned |
-| `.trellis/spec/backend/logging-guidelines.md` | Log levels, format, what to log |
-| `.trellis/spec/backend/quality-guidelines.md` | Code review standards, testing requirements |
+| `.trellis/spec/backend/directory-structure.md` | Where different file types go (routes, services, utils) — **done** |
+| `.trellis/spec/backend/database-guidelines.md` | ORM, migrations, query patterns, naming conventions — **done** (sqlite3 Store) |
+| `.trellis/spec/backend/error-handling.md` | How errors are caught, logged, and returned — **done** |
+| `.trellis/spec/backend/logging-guidelines.md` | Log levels, format, what to log — **done** |
+| `.trellis/spec/backend/quality-guidelines.md` | Code review standards, testing requirements — **done** |
 
 
 ### Thinking guides (already populated)

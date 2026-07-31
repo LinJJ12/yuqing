@@ -1,12 +1,12 @@
 # Backend Development Guidelines
 
-> Best practices for backend development in this project.
+> Conventions for the 知微 (Zhiwei) FastAPI backend under `backend/src/`.
 
 ---
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+Backend is a BFF: HTTP routers call `services/` (or `storage/` for simple CRUD), never run model inference or raw SQL inside route handlers. Product docs live in `docs/`; layer ownership lives in each directory's README.
 
 ---
 
@@ -14,25 +14,21 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | To fill |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Directory Structure](./directory-structure.md) | Module organization and file layout | Filled |
+| [Database Guidelines](./database-guidelines.md) | SQLite Store patterns, schema, queries | Filled |
+| [Error Handling](./error-handling.md) | `ok` / `err` envelope and exceptions | Filled |
+| [Quality Guidelines](./quality-guidelines.md) | Forbidden patterns, testing | Filled |
+| [Logging Guidelines](./logging-guidelines.md) | Print/logging and secrets | Filled |
 
 ---
 
-## How to Fill These Guidelines
+## Product anchors (read when changing behavior)
 
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
+- Product PRD: `docs/prd.md`
+- Directory rules: `docs/directory-structure.md`
+- Backend layer map: `backend/src/README.md`
+- API vertical sync: every route change must update `frontend/src/api/client.js` (and page callers)
 
 ---
 
-**Language**: All documentation should be written in **English**.
+**Language**: Spec files in this folder are written in **English** for Trellis sub-agents. Product-facing docs under `docs/` remain Chinese.

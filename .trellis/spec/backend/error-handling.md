@@ -1,51 +1,68 @@
 # Error Handling
 
-> How errors are handled in this project.
+> HTTP envelope and exception patterns.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's error handling conventions here.
+Public JSON contract (success / failure):
 
-Questions to answer:
-- What error types do you define?
-- How are errors propagated?
-- How are errors logged?
-- How are errors returned to clients?
--->
+```json
+{ "ok": true, "data": { } }
+{ "ok": false, "error": { "code": "snake_case", "message": "人类可读中文或英文", "details": { } } }
+```
 
-(To be filled by the team)
+Helpers: `src.lib.http.ok` and `src.lib.http.err` return `JSONResponse`.
+
+`app.py` registers a catch-all `Exception` handler that returns `err("internal_error", …, status=500)` so clients never get opaque plain-text 500s.
 
 ---
 
 ## Error Types
 
-<!-- Custom error classes/types -->
+| Mechanism | When |
+|-----------|------|
+| `err(code, message, status=…)` | Expected business failures (400/404/409/413/503) |
+| `ValueError` from Store/services | Mapped in router to `invalid_request` / `invalid_label` |
+| `LookupError` | Missing post → 404 `not_found` |
+| `AgentUnavailableError` | Agent/LLM not configured → 503 |
+| Unhandled `Exception` | 500 `internal_error` |
 
-(To be filled by the team)
+Do not invent parallel response shapes in new routers.
 
 ---
 
 ## Error Handling Patterns
 
-<!-- Try-catch patterns, error propagation -->
+```python
+# Good: router maps domain errors
+try:
+    post = get_store().update_post(post_id, **payload)
+except ValueError as exc:
+    return err("invalid_request", str(exc), status=400)
+if not post:
+    return err("not_found", "帖子不存在", status=404)
+return ok(post)
+```
 
-(To be filled by the team)
+Services may raise; routers translate. Prefer Chinese user-facing `message` strings already used elsewhere.
 
 ---
 
 ## API Error Responses
 
-<!-- Standard error response format -->
+- Validation by FastAPI/Pydantic may return **422** (framework default) — smoke tests accept 400 or 422 for missing upload file
+- Upload too large: `413` `file_too_large`
+- Duplicate insert: `409` `duplicate` when UNIQUE fails on create
 
-(To be filled by the team)
+Frontend: always check `res.ok` before reading `res.data`; show `res.error.message`.
 
 ---
 
 ## Common Mistakes
 
-<!-- Error handling mistakes your team has made -->
-
-(To be filled by the team)
+- Returning bare `{"error": "..."}` without `ok: false`
+- Swallowing exceptions and returning empty 200
+- Leaking stack traces or absolute local paths in `message` for expected errors
+- Forgetting to sync new error codes with UI copy

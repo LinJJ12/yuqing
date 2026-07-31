@@ -14,7 +14,7 @@
 |------|--------|
 | `app.py` | 创建 `FastAPI` 应用、挂载各 router |
 | `health.py` | `/health/*` |
-| `data.py` | `/imports` `/posts` `/posts/review` `/posts/{id}/sentiment` `/posts/delete` `/dashboard/overview` |
+| `data.py` | `/imports` `/posts`（含 CRUD、`q` 搜索） `/posts/review` `/posts/{id}/sentiment` `/posts/delete` `/dashboard/overview` |
 | `collect.py` | `/collect/bilibili`（含标题门禁 / 评论去噪参数） |
 | `analysis.py` | `/analysis/*` `/analysis-jobs` |
 | `alerts.py` | `/alerts` `/trends` `/settings/alert-keywords` |
