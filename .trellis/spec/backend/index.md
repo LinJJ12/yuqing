@@ -20,6 +20,8 @@ Backend is a BFF: HTTP routers call `services/` (or `storage/` for simple CRUD),
 | [Quality Guidelines](./quality-guidelines.md) | Forbidden patterns, testing | Filled |
 | [Logging Guidelines](./logging-guidelines.md) | Print/logging and secrets | Filled |
 
+Frontend conventions (Vue): see [`../frontend/index.md`](../frontend/index.md).
+
 ---
 
 ## Product anchors (read when changing behavior)

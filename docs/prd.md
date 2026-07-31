@@ -91,7 +91,7 @@
 | 性能 | GPU 可用时 BERT/嵌入上 GPU；无 GPU 则 CPU 降级并日志提示 |
 | 安全 | 密钥仅 `backend/.env`；前端不持有模型 Key |
 | 可维护 | 改接口须同步 `backend/src/api/` 与 `frontend/src/api/` |
-| 测试 | `uv run pytest`（`backend/tests`，忽略 vendor）；前端 `node scripts/agent-session-check.mjs`；完整冒烟 `backend/scripts/smoke_test.py` |
+| 测试 | `uv run pytest`（`backend/tests`，含 posts / import / alerts / reports / jobs）；前端 `node scripts/agent-session-check.mjs`；完整冒烟 `backend/scripts/smoke_test.py` |
 | AI 协作 | 可选 Trellis（`.trellis/` + Cursor 命令）；会话脚本默认不自动 commit |
 | 品牌 | 产品名「知微」；仓库目录名 `yuqing` 仅为路径，不代表品牌 |
 

@@ -1,0 +1,6 @@
+{"path": ".trellis/spec/backend/quality-guidelines.md", "note": "testing bar"}
+{"path": ".trellis/spec/backend/error-handling.md", "note": "400 missing vs partial items"}
+{"path": ".trellis/spec/frontend/quality-guidelines.md", "note": "build + client sync"}
+{"path": "docs/prd.md", "note": "acceptance vs product scope"}
+{"path": ".trellis/tasks/07-31-multi-bv-up-compare/prd.md", "note": "acceptance criteria"}
+{"path": ".trellis/tasks/07-31-multi-bv-up-compare/design.md", "note": "API sketch"}

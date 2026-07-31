@@ -1,0 +1,7 @@
+{"path": ".trellis/spec/backend/directory-structure.md", "note": "api/services layering"}
+{"path": ".trellis/spec/backend/database-guidelines.md", "note": "bvid json_extract patterns"}
+{"path": ".trellis/spec/backend/quality-guidelines.md", "note": "pytest + vertical sync"}
+{"path": ".trellis/spec/frontend/api-client.md", "note": "client.js sync"}
+{"path": ".trellis/spec/frontend/pages-and-state.md", "note": "reports query patterns"}
+{"path": "backend/src/services/video_report.py", "note": "existing single-video aggregate"}
+{"path": "backend/src/services/bilibili_collect.py", "note": "where to attach mid"}

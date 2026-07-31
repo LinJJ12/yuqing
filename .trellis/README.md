@@ -13,7 +13,7 @@
 |------|------|
 | `workflow.md` | Plan → Execute → Finish；技能路由 |
 | `config.yaml` | 项目级 Trellis 配置 |
-| `spec/` | 分层编码约定（写代码前按层阅读） |
+| `spec/` | 分层编码约定（写代码前按层阅读）→ `spec/backend/` · `spec/frontend/` |
 | `tasks/` | 进行中 / 已归档任务（PRD、research、jsonl） |
 | `workspace/` | 开发者 journal / 会话痕迹 |
 | `scripts/` | `task.py` 等本地任务脚本 |

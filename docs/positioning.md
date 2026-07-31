@@ -70,8 +70,8 @@
 - 评论质量与水军信号更细（复用并加强现有 quality 门禁）
 - 预警订阅（本地通知 / Webhook），报告模板品牌化
 - 词典 vs BERT 对照实验表（Gate 已提示的可选下一步）
-- 前端分层 spec（Trellis）与更完整的 API 契约测试
-- 洞察 / 入库 / 助手交互继续打磨（筛选深链、批量操作、会话导出）
+- 前端分层 spec（Trellis）与更完整的 API 契约测试 — **pytest 已加厚；frontend spec 已就位**
+- **多 BV / UP 口碑对比**（任务 `.trellis/tasks/07-31-multi-bv-up-compare`）
 
 ### 3.2 中端（多平台观众情报）
 
