@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { Download, ExternalLink, FileText, RefreshCw, Sparkles } from '@lucide/vue'
-import PageHeader from '../components/PageHeader.vue'
 import VideoScopePicker from '../components/VideoScopePicker.vue'
 import {
   fetchReportSummary,
@@ -88,6 +87,82 @@ const sentimentPending = computed(
     ),
 )
 
+/** 口碑结论结构化展示：统计 / 倾向 / 词 / 建议分列，避免整段挤在一行 */
+const conclusionCard = computed(() => {
+  const report = videoReport.value
+  if (!report) return null
+
+  const s = videoSentiment.value
+  const total = videoTotal.value
+  const unknown = Number(s.unknown ?? report.sentiment?.pending ?? 0)
+  const labeled = Math.max(total - unknown, 0)
+
+  const pos = Number(s.positive ?? 0)
+  const neu = Number(s.neutral ?? 0)
+  const neg = Number(s.negative ?? 0)
+  const unc = Number(s.uncertain ?? 0)
+
+  let tone = ''
+  let advice = ''
+  const bars = []
+
+  if (labeled > 0) {
+    const posR = pos / labeled
+    const negR = neg / labeled
+    if (negR >= 0.45) tone = '整体偏负'
+    else if (posR >= 0.45) tone = '整体偏正'
+    else if (Math.abs(posR - negR) < 0.12) tone = '褒贬接近、整体偏中性'
+    else tone = '情绪分化明显'
+
+    if (!sentimentPending.value) {
+      if (negR >= 0.35) {
+        advice = '建议关注差评集中点，再决定是否需要回复或调整内容。'
+      } else if (posR >= 0.5) {
+        advice = '观众反馈偏积极，可提炼好评点用于简介或后续选题。'
+      } else {
+        advice = '建议结合负面样例与高频词，定位具体槽点后再做内容迭代。'
+      }
+    }
+
+    const mk = (key, count) => ({
+      key,
+      label: labelMap[key],
+      count,
+      pct: Math.round((count / labeled) * 100),
+      color: sentimentColor[key],
+    })
+    bars.push(mk('positive', pos), mk('neutral', neu), mk('negative', neg))
+    if (unc > 0) bars.push(mk('uncertain', unc))
+  }
+
+  const words = (report.word_cloud || [])
+    .slice(0, 6)
+    .map((w) => w?.name)
+    .filter(Boolean)
+
+  const keywordHits = [
+    ...new Set(
+      (report.alerts?.items || []).flatMap((a) => a.keywords || []).filter(Boolean),
+    ),
+  ].slice(0, 8)
+
+  const isAi = report.conclusion_source === 'llm'
+  const prose = String(report.conclusion || '').trim()
+
+  return {
+    labeled,
+    total,
+    tone,
+    advice: isAi ? '' : advice,
+    bars,
+    words,
+    keywordHits,
+    isAi,
+    prose,
+    showStructured: labeled > 0,
+  }
+})
+
 function ensureChart(instance, el) {
   if (!el) return null
   if (instance && !instance.isDisposed?.()) {
@@ -97,63 +172,85 @@ function ensureChart(instance, el) {
   return echarts.init(el)
 }
 
+/** 单视频 / 全局共用的情感环形图 */
+function sentimentDonutOption(data, total, subtext) {
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}<br/>{c} 条（{d}%）',
+    },
+    legend: {
+      bottom: 4,
+      left: 'center',
+      icon: 'circle',
+      itemWidth: 8,
+      itemHeight: 8,
+      itemGap: 14,
+      textStyle: { color: '#64748b', fontSize: 12 },
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['48%', '72%'],
+        center: ['50%', '46%'],
+        avoidLabelOverlap: true,
+        itemStyle: {
+          borderRadius: 6,
+          borderColor: '#fff',
+          borderWidth: 2,
+        },
+        label: {
+          color: '#475569',
+          fontSize: 12,
+          formatter: '{b}\n{d}%',
+        },
+        labelLine: {
+          length: 12,
+          length2: 8,
+          lineStyle: { color: '#e2e8f0' },
+        },
+        data: data.length
+          ? data
+          : [{ name: '暂无', value: 1, itemStyle: { color: '#e2e8f0' } }],
+      },
+    ],
+    title: {
+      text: String(total),
+      subtext,
+      left: '50%',
+      top: '38%',
+      textAlign: 'center',
+      textStyle: {
+        color: '#0f172a',
+        fontSize: 24,
+        fontWeight: 700,
+        fontFamily: 'JetBrains Mono, monospace',
+      },
+      subtextStyle: {
+        color: '#64748b',
+        fontSize: 12,
+        fontWeight: 400,
+      },
+    },
+  }
+}
+
+function sentimentPieData(byLabel) {
+  const order = ['positive', 'neutral', 'negative', 'uncertain', 'unknown']
+  return order
+    .filter((k) => (byLabel[k] || 0) > 0)
+    .map((k) => ({
+      name: labelMap[k] || k,
+      value: byLabel[k],
+      itemStyle: { color: sentimentColor[k] || '#94a3b8' },
+    }))
+}
+
 function renderVideoSentiment() {
   sentimentChart = ensureChart(sentimentChart, sentimentRef.value)
   if (!sentimentChart || !videoReport.value) return
-  const by = videoSentiment.value
-  const order = ['positive', 'neutral', 'negative', 'uncertain', 'unknown']
-  const data = order
-    .filter((k) => (by[k] || 0) > 0)
-    .map((k) => ({
-      name: labelMap[k],
-      value: by[k],
-      itemStyle: { color: sentimentColor[k] },
-    }))
-  sentimentChart.setOption(
-    {
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-      legend: {
-        bottom: 0,
-        left: 'center',
-        textStyle: { color: '#64748b', fontSize: 11 },
-        itemWidth: 10,
-        itemHeight: 10,
-      },
-      series: [
-        {
-          type: 'pie',
-          radius: ['46%', '70%'],
-          center: ['50%', '42%'],
-          label: { color: '#334155', fontSize: 11 },
-          data: data.length
-            ? data
-            : [{ name: '暂无', value: 1, itemStyle: { color: '#e2e8f0' } }],
-        },
-      ],
-      graphic: [
-        {
-          type: 'text',
-          left: 'center',
-          top: '36%',
-          style: {
-            text: String(videoTotal.value),
-            fill: '#0f172a',
-            fontSize: 22,
-            fontWeight: 700,
-            fontFamily: 'JetBrains Mono, monospace',
-            textAlign: 'center',
-          },
-        },
-        {
-          type: 'text',
-          left: 'center',
-          top: '48%',
-          style: { text: '评论', fill: '#64748b', fontSize: 12, textAlign: 'center' },
-        },
-      ],
-    },
-    true,
-  )
+  const data = sentimentPieData(videoSentiment.value)
+  sentimentChart.setOption(sentimentDonutOption(data, videoTotal.value, '评论'), true)
 }
 
 function renderGlobalTopics() {
@@ -218,60 +315,10 @@ function renderGlobalSentiment() {
     const key = row.label
     byLabel[key] = (byLabel[key] || 0) + (row.count || 0)
   }
-  const order = ['positive', 'neutral', 'negative', 'uncertain', 'unknown']
-  const data = order
-    .filter((k) => (byLabel[k] || 0) > 0)
-    .map((k) => ({
-      name: labelMap[k] || k,
-      value: byLabel[k],
-      itemStyle: { color: sentimentColor[k] || '#94a3b8' },
-    }))
-  const total = data.reduce((s, d) => s + d.value, 0)
-  sentimentChart.setOption(
-    {
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-      legend: {
-        bottom: 0,
-        left: 'center',
-        textStyle: { color: '#64748b', fontSize: 11 },
-        itemWidth: 10,
-        itemHeight: 10,
-      },
-      series: [
-        {
-          type: 'pie',
-          radius: ['46%', '70%'],
-          center: ['50%', '42%'],
-          label: { color: '#334155', fontSize: 11 },
-          data: data.length
-            ? data
-            : [{ name: '暂无', value: 1, itemStyle: { color: '#e2e8f0' } }],
-        },
-      ],
-      graphic: [
-        {
-          type: 'text',
-          left: 'center',
-          top: '36%',
-          style: {
-            text: String(total || report.value.overview?.total_posts || 0),
-            fill: '#0f172a',
-            fontSize: 22,
-            fontWeight: 700,
-            fontFamily: 'JetBrains Mono, monospace',
-            textAlign: 'center',
-          },
-        },
-        {
-          type: 'text',
-          left: 'center',
-          top: '48%',
-          style: { text: '总量', fill: '#64748b', fontSize: 12, textAlign: 'center' },
-        },
-      ],
-    },
-    true,
-  )
+  const data = sentimentPieData(byLabel)
+  const total =
+    data.reduce((s, d) => s + d.value, 0) || report.value.overview?.total_posts || 0
+  sentimentChart.setOption(sentimentDonutOption(data, total, '评论'), true)
 }
 
 async function paintCharts() {
@@ -453,26 +500,24 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page reports-page">
-    <PageHeader title="分析报告" subtitle="单视频口碑结论与预警样例（库级态势见「总览」）">
-      <template #actions>
-        <div class="segmented">
-          <button type="button" :class="{ active: mode === 'video' }" @click="mode = 'video'">
-            单视频口碑
-          </button>
-          <button type="button" :class="{ active: mode === 'global' }" @click="mode = 'global'">
-            全局导出
-          </button>
-        </div>
-        <button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="refresh">
-          <RefreshCw :size="14" />
-          刷新
-        </button>
-      </template>
-    </PageHeader>
-
-    <!-- 工具区 -->
+    <!-- 工具区：视频选择与模式切换同一行 -->
     <template v-if="mode === 'video'">
-      <VideoScopePicker :disabled="loading" :allow-empty="false" />
+      <VideoScopePicker :disabled="loading" :allow-empty="false">
+        <template #actions>
+          <div class="segmented">
+            <button type="button" :class="{ active: mode === 'video' }" @click="mode = 'video'">
+              单视频口碑
+            </button>
+            <button type="button" :class="{ active: mode === 'global' }" @click="mode = 'global'">
+              全局导出
+            </button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="refresh">
+            <RefreshCw :size="14" />
+            刷新
+          </button>
+        </template>
+      </VideoScopePicker>
       <p v-if="!videos.length && !loading" class="hint scope-empty">
         暂无视频评论。请到「监测」粘贴视频链接采集后再回来查看口碑。
       </p>
@@ -499,6 +544,20 @@ onBeforeUnmount(() => {
         <FileText :size="14" />
         导出文档
       </button>
+      <div class="export-actions">
+        <div class="segmented">
+          <button type="button" :class="{ active: mode === 'video' }" @click="mode = 'video'">
+            单视频口碑
+          </button>
+          <button type="button" :class="{ active: mode === 'global' }" @click="mode = 'global'">
+            全局导出
+          </button>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="refresh">
+          <RefreshCw :size="14" />
+          刷新
+        </button>
+      </div>
     </div>
 
     <p v-if="loading" class="panel muted">正在汇总…</p>
@@ -554,11 +613,57 @@ onBeforeUnmount(() => {
           情感分析尚未完成（BERT
           {{ videoReport.sentiment?.bert_done ?? 0 }}/{{ videoReport.sentiment?.total ?? videoTotal }}）。
           口碑结论仅供参考，请先到
-          <RouterLink to="/sentiment">情感页</RouterLink>
+          <RouterLink to="/insights">洞察页</RouterLink>
           确认进度。
         </div>
-        <div class="conclusion" :class="{ ai: videoReport.conclusion_source === 'llm' }">
-          {{ videoReport.conclusion }}
+        <div
+          v-if="conclusionCard"
+          class="conclusion"
+          :class="{ ai: conclusionCard.isAi }"
+        >
+          <template v-if="conclusionCard.showStructured">
+            <div class="conclusion-head">
+              <strong class="conclusion-tone">{{ conclusionCard.tone }}</strong>
+              <span class="conclusion-base">
+                基于已标注 {{ conclusionCard.labeled }} 条（共 {{ conclusionCard.total }}）
+              </span>
+            </div>
+            <div class="conclusion-bars" role="list">
+              <div
+                v-for="b in conclusionCard.bars"
+                :key="b.key"
+                class="sent-chip"
+                role="listitem"
+                :style="{ '--sent': b.color }"
+              >
+                <span class="sent-dot" aria-hidden="true" />
+                <span class="sent-name">{{ b.label }}</span>
+                <b>{{ b.count }}</b>
+                <em>{{ b.pct }}%</em>
+              </div>
+            </div>
+            <div v-if="conclusionCard.words.length" class="conclusion-row">
+              <span class="row-label">高频词</span>
+              <div class="tag-row">
+                <span v-for="w in conclusionCard.words" :key="w" class="word-tag">{{ w }}</span>
+              </div>
+            </div>
+            <div v-if="conclusionCard.keywordHits.length" class="conclusion-row">
+              <span class="row-label warn">敏感词</span>
+              <div class="tag-row">
+                <span
+                  v-for="w in conclusionCard.keywordHits"
+                  :key="w"
+                  class="word-tag warn"
+                >{{ w }}</span>
+              </div>
+            </div>
+            <p v-if="conclusionCard.advice" class="conclusion-advice">{{ conclusionCard.advice }}</p>
+            <p v-if="conclusionCard.isAi && conclusionCard.prose" class="conclusion-prose">
+              {{ conclusionCard.prose }}
+            </p>
+          </template>
+          <p v-else class="conclusion-prose alone">{{ conclusionCard.prose }}</p>
         </div>
         <details
           v-if="
@@ -574,25 +679,28 @@ onBeforeUnmount(() => {
       </section>
 
       <div class="viz-row">
-        <section class="panel">
+        <section class="panel viz-panel">
           <div class="panel-head">
             <h3>本视频情感</h3>
+            <span class="pill pill-default">占比</span>
           </div>
-          <div ref="sentimentRef" class="chart" />
+          <div ref="sentimentRef" class="chart chart-fill" />
         </section>
-        <section class="panel">
+        <section class="panel viz-panel">
           <div class="panel-head">
             <h3>本视频高频词</h3>
-            <span class="pill pill-default">前 {{ Math.min(18, videoReport.word_cloud?.length || 0) }}</span>
+            <span class="pill pill-default">
+              前 {{ Math.min(10, videoReport.word_cloud?.length || 0) }}
+            </span>
           </div>
           <div v-if="videoReport.word_cloud?.length" class="word-rank">
             <div
-              v-for="(w, idx) in videoReport.word_cloud.slice(0, 18)"
+              v-for="(w, idx) in videoReport.word_cloud.slice(0, 10)"
               :key="w.name"
               class="word-row"
             >
               <span class="word-idx">{{ idx + 1 }}</span>
-              <span class="word-name">{{ w.name }}</span>
+              <span class="word-name" :title="w.name">{{ w.name }}</span>
               <div class="word-bar-track">
                 <div
                   class="word-bar"
@@ -605,7 +713,7 @@ onBeforeUnmount(() => {
               <b>{{ w.value }}</b>
             </div>
           </div>
-          <p v-else class="hint">暂无分词结果</p>
+          <p v-else class="hint empty-hint">暂无分词结果</p>
         </section>
       </div>
 
@@ -708,7 +816,9 @@ onBeforeUnmount(() => {
     <template v-else-if="mode === 'global' && report">
       <section class="panel report-hero">
         <h3>{{ report.generated_for }}</h3>
-        <div v-if="report.ai_summary" class="conclusion ai">{{ report.ai_summary }}</div>
+        <div v-if="report.ai_summary" class="conclusion ai">
+          <p class="conclusion-prose alone">{{ report.ai_summary }}</p>
+        </div>
       </section>
 
       <div class="kpi-grid report-kpi">
@@ -795,6 +905,13 @@ onBeforeUnmount(() => {
   padding: 0.35rem 0;
   min-height: 2rem;
 }
+.export-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
 .check {
   display: inline-flex;
   align-items: center;
@@ -849,18 +966,136 @@ onBeforeUnmount(() => {
 }
 .conclusion {
   margin: 0.75rem 0 0;
-  padding: 0.85rem 1rem;
-  background: rgba(22, 163, 74, 0.06);
-  border: 1px solid rgba(22, 163, 74, 0.18);
+  padding: 1rem 1.1rem 1.05rem;
+  background: rgba(22, 163, 74, 0.05);
+  border: 1px solid rgba(22, 163, 74, 0.16);
+  border-left: 3px solid rgba(22, 163, 74, 0.55);
   border-radius: var(--radius-md);
-  line-height: 1.7;
   color: var(--text-primary);
-  white-space: pre-wrap;
-  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 .conclusion.ai {
-  background: rgba(15, 118, 110, 0.06);
-  border-color: rgba(15, 118, 110, 0.2);
+  background: rgba(15, 118, 110, 0.05);
+  border-color: rgba(15, 118, 110, 0.18);
+  border-left-color: rgba(15, 118, 110, 0.55);
+}
+.conclusion-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.85rem;
+}
+.conclusion-tone {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+.conclusion-base {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.conclusion-bars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.sent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sent) 22%, transparent);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.sent-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--sent);
+  flex-shrink: 0;
+}
+.sent-name {
+  color: var(--text-secondary);
+}
+.sent-chip b {
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.sent-chip em {
+  font-style: normal;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+.conclusion-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+}
+.row-label {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+.row-label.warn {
+  color: #b45309;
+}
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.word-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-border);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.word-tag.warn {
+  background: rgba(217, 119, 6, 0.08);
+  border-color: rgba(217, 119, 6, 0.28);
+  color: #92400e;
+}
+.conclusion-advice {
+  margin: 0;
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(22, 163, 74, 0.22);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.conclusion.ai .conclusion-advice {
+  border-top-color: rgba(15, 118, 110, 0.22);
+}
+.conclusion-prose {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  max-width: 72ch;
+}
+.conclusion-prose.alone {
+  max-width: none;
+}
+.conclusion.ai .conclusion-prose:not(.alone) {
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(15, 118, 110, 0.22);
+  color: var(--text-secondary);
 }
 .rule-snap {
   margin-top: 0.55rem;
@@ -884,37 +1119,54 @@ onBeforeUnmount(() => {
 
 .viz-row {
   display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
+  grid-template-columns: 1fr 1.15fr;
   gap: 0.75rem;
   margin-bottom: 0.85rem;
+  align-items: stretch;
 }
 .viz-row > .panel {
   margin-bottom: 0;
 }
+.viz-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.viz-panel .panel-head {
+  flex-shrink: 0;
+}
 .chart {
-  height: 240px;
+  height: 280px;
   width: 100%;
+}
+.chart-fill {
+  flex: 1;
+  min-height: 280px;
 }
 
 .word-rank {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  max-height: 240px;
-  overflow: auto;
+  justify-content: space-between;
+  gap: 0;
+  min-height: 280px;
+  padding: 0.15rem 0 0.1rem;
 }
 .word-row {
   display: grid;
-  grid-template-columns: 1.4rem 4.5rem 1fr 2rem;
-  gap: 0.45rem;
+  grid-template-columns: 1.4rem minmax(3.5rem, 5rem) 1fr 2rem;
+  gap: 0.5rem;
   align-items: center;
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
+  flex: 1;
 }
 .word-idx {
   font-family: var(--font-mono);
   color: var(--color-primary);
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
+  text-align: center;
 }
 .word-name {
   overflow: hidden;
@@ -923,21 +1175,30 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .word-bar-track {
-  height: 6px;
+  height: 8px;
   border-radius: 99px;
-  background: var(--bg-tertiary);
+  background: #f1f5f9;
   overflow: hidden;
 }
 .word-bar {
   height: 100%;
   border-radius: 99px;
-  background: linear-gradient(90deg, #0f766e, #2dd4bf);
+  background: var(--color-primary);
+  opacity: 0.85;
 }
 .word-row b {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--text-tertiary);
   text-align: right;
+}
+.empty-hint {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 240px;
+  margin: 0;
 }
 
 .detail-panel {

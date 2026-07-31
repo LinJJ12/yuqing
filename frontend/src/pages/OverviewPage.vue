@@ -1,4 +1,9 @@
 <script setup>
+/**
+ * 总览：沿用本站已验证图表样式
+ * - 趋势：预警页「灰柱 + 青绿折线」
+ * - 情感：洞察页环形图
+ */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import * as echarts from 'echarts'
@@ -9,6 +14,7 @@ import {
   ThumbsDown,
   Activity,
   ExternalLink,
+  ArrowRight,
 } from '@lucide/vue'
 import { fetchOverview, fetchTrends } from '../api/client'
 import { formatDateTime } from '../lib/datetime'
@@ -17,17 +23,13 @@ const loading = ref(true)
 const error = ref('')
 const overview = ref(null)
 const trendSeries = ref([])
-const clock = ref('')
 
+const trendRef = ref(null)
 const sentimentRef = ref(null)
 const platformRef = ref(null)
-const topicRef = ref(null)
-const trendRef = ref(null)
+let trendChart
 let sentimentChart
 let platformChart
-let topicChart
-let trendChart
-let clockTimer
 
 const sentimentMap = {
   positive: '正面',
@@ -39,7 +41,7 @@ const sentimentMap = {
 
 const sentimentColor = {
   positive: '#16a34a',
-  neutral: '#64748b',
+  neutral: '#0f766e',
   negative: '#dc2626',
   uncertain: '#d97706',
   unknown: '#94a3b8',
@@ -55,6 +57,7 @@ const platformMap = {
 
 const total = computed(() => overview.value?.total_posts ?? 0)
 const topicCount = computed(() => overview.value?.by_topic?.length ?? 0)
+
 const analyzedRate = computed(() => {
   if (!total.value) return '0%'
   const labeled = (overview.value?.by_sentiment || [])
@@ -64,8 +67,7 @@ const analyzedRate = computed(() => {
 })
 
 function sentimentCount(label) {
-  const row = overview.value?.by_sentiment?.find((x) => x.label === label)
-  return row?.count ?? 0
+  return overview.value?.by_sentiment?.find((x) => x.label === label)?.count ?? 0
 }
 
 const positiveCount = computed(() => sentimentCount('positive'))
@@ -75,6 +77,31 @@ const trendTotal = computed(() =>
   trendSeries.value.filter((s) => !s.is_forecast).reduce((a, s) => a + (s.count || 0), 0),
 )
 
+const sentimentShares = computed(() => {
+  const counts = { positive: 0, neutral: 0, negative: 0, uncertain: 0 }
+  for (const row of overview.value?.by_sentiment || []) {
+    if (row.label in counts) counts[row.label] += Number(row.count) || 0
+  }
+  return ['positive', 'neutral', 'negative', 'uncertain']
+    .map((key) => ({
+      key,
+      label: sentimentMap[key],
+      count: counts[key],
+    }))
+    .filter((s) => s.count > 0)
+})
+
+const topTopics = computed(() => {
+  const rows = [...(overview.value?.by_topic || [])].slice(0, 5)
+  const max = Math.max(...rows.map((r) => r.count), 1)
+  return rows.map((r) => ({
+    ...r,
+    pct: Math.round((r.count / max) * 100),
+  }))
+})
+
+const recentPosts = computed(() => overview.value?.recent_posts?.slice(0, 8) || [])
+
 function platformLabel(code) {
   return platformMap[code] || code || '—'
 }
@@ -83,190 +110,16 @@ function videoTitle(post) {
   return post?.raw?.extra?.video_title || ''
 }
 
-function tickClock() {
-  const now = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  clock.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
-}
-
-const axisText = '#64748b'
-const axisLine = '#e2e8f0'
-const splitLine = '#f1f5f9'
-
 function ensureChart(instance, el) {
   if (!el) return null
   if (instance && !instance.isDisposed?.()) {
-    const dom = instance.getDom?.()
-    if (dom === el) return instance
+    if (instance.getDom?.() === el) return instance
     instance.dispose()
   }
   return echarts.init(el)
 }
 
-function renderSentiment() {
-  sentimentChart = ensureChart(sentimentChart, sentimentRef.value)
-  if (!sentimentChart) return
-  const rows = overview.value?.by_sentiment || []
-  const data = rows.map((r) => ({
-    name: sentimentMap[r.label] || r.label,
-    value: r.count,
-    itemStyle: { color: sentimentColor[r.label] || '#94a3b8' },
-  }))
-  sentimentChart.setOption(
-    {
-      backgroundColor: 'transparent',
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-      legend: {
-        bottom: 0,
-        left: 'center',
-        textStyle: { color: axisText, fontSize: 11 },
-        itemWidth: 10,
-        itemHeight: 10,
-      },
-      series: [
-        {
-          type: 'pie',
-          radius: ['48%', '72%'],
-          center: ['50%', '44%'],
-          avoidLabelOverlap: true,
-          label: { color: '#334155', fontSize: 11 },
-          labelLine: { lineStyle: { color: '#cbd5e1' } },
-          data: data.length
-            ? data
-            : [{ name: '暂无', value: 1, itemStyle: { color: '#e2e8f0' } }],
-        },
-      ],
-      graphic: [
-        {
-          type: 'text',
-          left: 'center',
-          top: '38%',
-          style: {
-            text: String(total.value),
-            fill: '#0f172a',
-            fontSize: 26,
-            fontWeight: 700,
-            fontFamily: 'JetBrains Mono, monospace',
-            textAlign: 'center',
-          },
-        },
-        {
-          type: 'text',
-          left: 'center',
-          top: '50%',
-          style: {
-            text: '总量',
-            fill: axisText,
-            fontSize: 12,
-            textAlign: 'center',
-          },
-        },
-      ],
-    },
-    true,
-  )
-}
-
-function renderPlatform() {
-  platformChart = ensureChart(platformChart, platformRef.value)
-  if (!platformChart) return
-  const rows = [...(overview.value?.by_platform || [])].sort((a, b) => b.count - a.count)
-  platformChart.setOption(
-    {
-      backgroundColor: 'transparent',
-      tooltip: { trigger: 'axis' },
-      grid: { left: 48, right: 16, top: 24, bottom: 32 },
-      xAxis: {
-        type: 'category',
-        data: rows.map((r) => platformLabel(r.platform)),
-        axisLine: { lineStyle: { color: axisLine } },
-        axisLabel: { color: axisText, fontSize: 11 },
-        axisTick: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        minInterval: 1,
-        splitLine: { lineStyle: { color: splitLine } },
-        axisLabel: { color: axisText },
-      },
-      series: [
-        {
-          type: 'bar',
-          barMaxWidth: 36,
-          data: rows.map((r) => r.count),
-          itemStyle: {
-            borderRadius: [4, 4, 0, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#14b8a6' },
-              { offset: 1, color: '#0f766e' },
-            ]),
-          },
-        },
-      ],
-    },
-    true,
-  )
-}
-
-function renderTopics() {
-  topicChart = ensureChart(topicChart, topicRef.value)
-  if (!topicChart) return
-  const rows = [...(overview.value?.by_topic || [])].slice(0, 10).reverse()
-  if (!rows.length) {
-    topicChart.clear()
-    topicChart.setOption({
-      title: {
-        text: '暂无话题数据',
-        left: 'center',
-        top: 'middle',
-        textStyle: { color: '#94a3b8', fontSize: 13, fontWeight: 400 },
-      },
-    })
-    return
-  }
-  topicChart.setOption(
-    {
-      backgroundColor: 'transparent',
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 88, right: 36, top: 12, bottom: 12 },
-      xAxis: {
-        type: 'value',
-        minInterval: 1,
-        splitLine: { lineStyle: { color: splitLine } },
-        axisLabel: { color: axisText },
-      },
-      yAxis: {
-        type: 'category',
-        data: rows.map((r) => r.topic),
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { color: axisText, fontSize: 11, width: 72, overflow: 'truncate' },
-      },
-      series: [
-        {
-          type: 'bar',
-          barMaxWidth: 14,
-          data: rows.map((r) => r.count),
-          itemStyle: {
-            borderRadius: [0, 4, 4, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: '#0284c7' },
-              { offset: 1, color: '#38bdf8' },
-            ]),
-          },
-          label: {
-            show: true,
-            position: 'right',
-            color: '#64748b',
-            fontSize: 11,
-          },
-        },
-      ],
-    },
-    true,
-  )
-}
-
+/** 与预警页同款：灰柱 + 青绿滑动平均 */
 function renderTrend() {
   trendChart = ensureChart(trendChart, trendRef.value)
   if (!trendChart) return
@@ -285,53 +138,136 @@ function renderTrend() {
   }
   trendChart.setOption(
     {
-      backgroundColor: 'transparent',
       tooltip: { trigger: 'axis' },
       legend: {
         data: ['发帖量', '滑动平均'],
         top: 0,
-        right: 0,
-        textStyle: { color: axisText, fontSize: 11 },
+        left: 'center',
+        itemWidth: 12,
+        itemHeight: 8,
+        textStyle: { color: '#52525b', fontSize: 11 },
       },
-      grid: { left: 44, right: 16, top: 36, bottom: 28 },
+      grid: { left: 40, right: 12, top: 28, bottom: 28 },
       xAxis: {
         type: 'category',
         data: series.map((s) => s.day),
-        boundaryGap: false,
-        axisLine: { lineStyle: { color: axisLine } },
-        axisLabel: { color: axisText, fontSize: 10 },
+        axisLine: { lineStyle: { color: '#e4e4e7' } },
+        axisLabel: { color: '#71717a', margin: 8, fontSize: 11 },
       },
       yAxis: {
         type: 'value',
         minInterval: 1,
-        splitLine: { lineStyle: { color: splitLine } },
-        axisLabel: { color: axisText },
+        splitLine: { lineStyle: { color: '#f4f4f5' } },
+        axisLabel: { color: '#71717a' },
       },
       series: [
         {
           name: '发帖量',
-          type: 'line',
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 5,
+          type: 'bar',
+          barMaxWidth: 22,
           data: series.map((s) => (s.is_forecast ? null : s.count)),
-          lineStyle: { width: 2.5, color: '#0f766e' },
-          itemStyle: { color: '#0f766e' },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(15, 118, 110, 0.22)' },
-              { offset: 1, color: 'rgba(15, 118, 110, 0.02)' },
-            ]),
-          },
+          itemStyle: { color: '#e4e4e7', borderRadius: [4, 4, 0, 0] },
         },
         {
           name: '滑动平均',
           type: 'line',
           smooth: true,
-          symbol: 'none',
           data: series.map((s) => (s.is_forecast ? null : s.rolling_mean)),
-          lineStyle: { width: 1.5, color: '#0284c7', type: 'dashed' },
-          itemStyle: { color: '#0284c7' },
+          itemStyle: { color: '#0f766e' },
+          lineStyle: { width: 2.5, color: '#0f766e' },
+        },
+      ],
+    },
+    true,
+  )
+}
+
+/** 与洞察页同款环形图 */
+function renderSentiment() {
+  sentimentChart = ensureChart(sentimentChart, sentimentRef.value)
+  if (!sentimentChart) return
+  const data = sentimentShares.value.map((s) => ({
+    name: s.label,
+    value: s.count,
+    itemStyle: { color: sentimentColor[s.key] },
+  }))
+  sentimentChart.setOption(
+    {
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}<br/>{c} 条（{d}%）',
+      },
+      legend: {
+        bottom: 0,
+        left: 'center',
+        itemWidth: 10,
+        itemHeight: 8,
+        textStyle: { color: '#64748b', fontSize: 11 },
+      },
+      series: [
+        {
+          type: 'pie',
+          radius: ['40%', '64%'],
+          center: ['50%', '44%'],
+          avoidLabelOverlap: true,
+          itemStyle: {
+            borderRadius: 5,
+            borderColor: '#fff',
+            borderWidth: 2,
+          },
+          label: {
+            color: '#475569',
+            fontSize: 11,
+            formatter: '{b}\n{d}%',
+          },
+          data: data.length
+            ? data
+            : [{ name: '暂无标注', value: 1, itemStyle: { color: '#e4e4e7' } }],
+        },
+      ],
+    },
+    true,
+  )
+}
+
+function renderPlatform() {
+  platformChart = ensureChart(platformChart, platformRef.value)
+  if (!platformChart) return
+  const rows = [...(overview.value?.by_platform || [])].sort((a, b) => b.count - a.count)
+  platformChart.setOption(
+    {
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: 36, right: 8, top: 18, bottom: 28, containLabel: false },
+      xAxis: {
+        type: 'category',
+        data: rows.map((r) => platformLabel(r.platform)),
+        axisLine: { lineStyle: { color: '#e4e4e7' } },
+        axisTick: { show: false },
+        axisLabel: { color: '#71717a', interval: 0, fontSize: 11 },
+      },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        splitLine: { lineStyle: { color: '#f4f4f5' } },
+        axisLabel: { color: '#71717a', fontSize: 11 },
+      },
+      series: [
+        {
+          type: 'bar',
+          barMaxWidth: 36,
+          barCategoryGap: '50%',
+          data: rows.map((r) => r.count),
+          itemStyle: {
+            color: '#0f766e',
+            borderRadius: [4, 4, 0, 0],
+          },
+          label: {
+            show: true,
+            position: 'top',
+            color: '#64748b',
+            fontSize: 10,
+            fontWeight: 600,
+          },
         },
       ],
     },
@@ -340,28 +276,24 @@ function renderTrend() {
 }
 
 function renderAll() {
-  renderPlatform()
-  renderSentiment()
-  renderTopics()
   renderTrend()
+  renderSentiment()
+  renderPlatform()
   requestAnimationFrame(() => {
-    platformChart?.resize()
-    sentimentChart?.resize()
-    topicChart?.resize()
     trendChart?.resize()
+    sentimentChart?.resize()
+    platformChart?.resize()
+    requestAnimationFrame(() => platformChart?.resize())
   })
 }
 
 function onResize() {
-  platformChart?.resize()
-  sentimentChart?.resize()
-  topicChart?.resize()
   trendChart?.resize()
+  sentimentChart?.resize()
+  platformChart?.resize()
 }
 
 onMounted(async () => {
-  tickClock()
-  clockTimer = setInterval(tickClock, 1000)
   window.addEventListener('resize', onResize)
   try {
     const [o, t] = await Promise.all([fetchOverview(), fetchTrends(14)])
@@ -376,61 +308,48 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-  // 等 loading=false 后图表 DOM 才挂载，再绘制
   await nextTick()
   if (total.value > 0) renderAll()
 })
 
 onBeforeUnmount(() => {
-  clearInterval(clockTimer)
   window.removeEventListener('resize', onResize)
+  trendChart?.dispose()
   sentimentChart?.dispose()
   platformChart?.dispose()
-  topicChart?.dispose()
-  trendChart?.dispose()
+  trendChart = null
   sentimentChart = null
   platformChart = null
-  topicChart = null
-  trendChart = null
 })
 </script>
 
 <template>
-  <div class="page overview-screen">
-    <header class="screen-head">
-      <div>
-        <h2 class="screen-title">知微可视化总览</h2>
-        <p class="screen-sub">采集量 · 情感结构 · 话题热度 · 入库动态</p>
-      </div>
-      <div class="screen-meta">
-        <span class="live-dot" aria-hidden="true" />
-        <span>{{ clock }}</span>
-      </div>
-    </header>
-
-    <div v-if="loading" class="screen-card">
+  <div class="page overview-page" :class="{ 'is-filled': total > 0 && !loading && !error }">
+    <div v-if="loading" class="panel">
       <div class="skeleton" style="width: 40%; margin-bottom: 0.75rem" />
       <div class="skeleton" style="width: 70%" />
     </div>
-    <p v-else-if="error" class="screen-card err">{{ error }}</p>
+    <p v-else-if="error" class="panel err">{{ error }}</p>
 
     <template v-else-if="total === 0">
-      <section class="screen-card first-run">
+      <section class="panel first-run">
         <h3>开始第一次演示</h3>
         <p class="first-run-lead">
-          库内还没有帖子。按下面三步即可跑通「采集 → 情感 → 口碑」。
+          库内还没有帖子。按下面三步即可跑通「采集 → 洞察 → 口碑」。
         </p>
         <ol class="first-run-steps">
           <li>
             <b>监测：贴 BV 采集评论</b>
             <p>打开监测页，粘贴 B 站视频链接或 BV 号，开始采集并入库。</p>
             <RouterLink class="btn btn-primary btn-sm" to="/monitor">去监测</RouterLink>
-            <RouterLink class="btn btn-secondary btn-sm" to="/inbox" style="margin-left: 0.45rem">看入库</RouterLink>
+            <RouterLink class="btn btn-secondary btn-sm" to="/inbox" style="margin-left: 0.45rem">
+              看入库
+            </RouterLink>
           </li>
           <li>
-            <b>情感：确认分析完成</b>
-            <p>采集后会自动排队情感分析；也可在情感页手动跑批。</p>
-            <RouterLink class="btn btn-secondary btn-sm" to="/sentiment">去情感</RouterLink>
+            <b>洞察：跑批情感与词云</b>
+            <p>采集后会自动排队情感分析；也可在洞察页手动跑批并看分布/词云。</p>
+            <RouterLink class="btn btn-secondary btn-sm" to="/insights">去洞察</RouterLink>
           </li>
           <li>
             <b>报告：看单视频口碑</b>
@@ -447,133 +366,163 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else>
-      <div class="kpi-row">
-        <div class="kpi-card">
-          <div class="kpi-top">
-            <span>帖子总量</span>
-            <MessageSquareText :size="15" />
+      <div class="overview-body">
+        <div class="kpi-grid kpi-compact">
+          <div class="kpi">
+            <div class="kpi-label">
+              <span>帖子总量</span>
+              <MessageSquareText :size="14" />
+            </div>
+            <div class="kpi-value">{{ total }}</div>
+            <p class="kpi-foot">已标注 {{ analyzedRate }}</p>
           </div>
-          <div class="kpi-num">{{ total }}</div>
-          <div class="kpi-foot">已标注 {{ analyzedRate }}</div>
+          <div class="kpi">
+            <div class="kpi-label">
+              <span>话题数</span>
+              <Tags :size="14" />
+            </div>
+            <div class="kpi-value">{{ topicCount }}</div>
+            <p class="kpi-foot">库内标签聚合</p>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">
+              <span>正面</span>
+              <ThumbsUp :size="14" />
+            </div>
+            <div class="kpi-value ok">{{ positiveCount }}</div>
+            <p class="kpi-foot">中性 {{ neutralCount }}</p>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">
+              <span>负面</span>
+              <ThumbsDown :size="14" />
+            </div>
+            <div class="kpi-value bad">{{ negativeCount }}</div>
+            <p class="kpi-foot">需关注口碑风险</p>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">
+              <span>近 14 日</span>
+              <Activity :size="14" />
+            </div>
+            <div class="kpi-value">{{ trendTotal }}</div>
+            <p class="kpi-foot">区间发帖量</p>
+          </div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-top">
-            <span>话题数</span>
-            <Tags :size="15" />
+
+        <div class="main-row">
+          <section class="panel fill-panel">
+            <div class="panel-head">
+              <h3>情感分布</h3>
+              <RouterLink class="panel-link" to="/insights">
+                去洞察
+                <ArrowRight :size="13" />
+              </RouterLink>
+            </div>
+            <div ref="sentimentRef" class="chart chart-fill" />
+          </section>
+          <div class="main-side">
+            <section class="panel fill-panel">
+              <div class="panel-head">
+                <h3>数据来源</h3>
+                <span class="panel-meta">按平台</span>
+              </div>
+              <div ref="platformRef" class="chart chart-fill" />
+            </section>
+            <section class="panel fill-panel">
+              <div class="panel-head">
+                <h3>话题热度</h3>
+                <span class="panel-meta">Top {{ topTopics.length }}</span>
+              </div>
+              <ul v-if="topTopics.length" class="rank-list">
+                <li v-for="(item, idx) in topTopics" :key="item.topic">
+                  <span class="rank-idx">{{ idx + 1 }}</span>
+                  <div class="rank-body">
+                    <div class="rank-top">
+                      <span class="rank-name" :title="item.topic">{{ item.topic }}</span>
+                      <b>{{ item.count }}</b>
+                    </div>
+                    <div class="rank-bar">
+                      <i :style="{ width: `${item.pct}%` }" />
+                    </div>
+                  </div>
+                </li>
+              </ul>
+              <p v-else class="empty-hint">暂无话题数据</p>
+            </section>
           </div>
-          <div class="kpi-num">{{ topicCount }}</div>
-          <div class="kpi-foot">库内标签聚合</div>
         </div>
-        <div class="kpi-card accent-pos">
-          <div class="kpi-top">
-            <span>正面</span>
-            <ThumbsUp :size="15" />
-          </div>
-          <div class="kpi-num pos">{{ positiveCount }}</div>
-          <div class="kpi-foot">中性 {{ neutralCount }}</div>
+
+        <div class="detail-row">
+          <section class="panel fill-panel">
+            <div class="panel-head">
+              <h3>入库趋势</h3>
+              <span class="panel-meta">近 14 日</span>
+            </div>
+            <div ref="trendRef" class="chart chart-fill" />
+          </section>
+          <section class="panel feed-panel">
+            <div class="panel-head">
+              <h3>最近入库</h3>
+              <RouterLink class="panel-link" to="/inbox">
+                全部
+                <ArrowRight :size="13" />
+              </RouterLink>
+            </div>
+            <div v-if="recentPosts.length" class="feed">
+              <article v-for="post in recentPosts" :key="post.id" class="feed-item">
+                <header>
+                  <b>{{ post.topic || '未分类' }}</b>
+                  <span class="pill pill-default">{{ platformLabel(post.platform) }}</span>
+                  <em :style="{ color: sentimentColor[post.sentiment_label] || '#64748b' }">
+                    {{ sentimentMap[post.sentiment_label] || '—' }}
+                  </em>
+                </header>
+                <p v-if="videoTitle(post)" class="feed-sub">{{ videoTitle(post) }}</p>
+                <p class="feed-text">{{ post.text }}</p>
+                <footer>
+                  <time>{{ formatDateTime(post.fetched_at || post.published_at) }}</time>
+                  <a
+                    v-if="post.source_url"
+                    :href="post.source_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink :size="12" />
+                    原帖
+                  </a>
+                </footer>
+              </article>
+            </div>
+            <p v-else class="empty-hint">还没有帖子</p>
+          </section>
         </div>
-        <div class="kpi-card accent-neg">
-          <div class="kpi-top">
-            <span>负面</span>
-            <ThumbsDown :size="15" />
-          </div>
-          <div class="kpi-num neg">{{ negativeCount }}</div>
-          <div class="kpi-foot">需关注口碑风险</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-top">
-            <span>近 14 日</span>
-            <Activity :size="15" />
-          </div>
-          <div class="kpi-num sm">{{ trendTotal }}</div>
-          <div class="kpi-foot">趋势区间发帖量</div>
-        </div>
-      </div>
-
-      <div class="viz-grid">
-        <section class="screen-card">
-          <div class="card-head">
-            <h3>数据来源</h3>
-            <span>平台对比</span>
-          </div>
-          <div ref="platformRef" class="chart" />
-        </section>
-
-        <section class="screen-card">
-          <div class="card-head">
-            <h3>情感结构</h3>
-            <span>占比环形图</span>
-          </div>
-          <div ref="sentimentRef" class="chart" />
-        </section>
-
-        <section class="screen-card">
-          <div class="card-head">
-            <h3>话题热度</h3>
-            <span>前 10</span>
-          </div>
-          <div ref="topicRef" class="chart chart-tall" />
-        </section>
-      </div>
-
-      <div class="bottom-grid">
-        <section class="screen-card">
-          <div class="card-head">
-            <h3>入库趋势</h3>
-            <span>近 14 日 · 滑动平均</span>
-          </div>
-          <div ref="trendRef" class="chart chart-trend" />
-        </section>
-
-        <section class="screen-card feed-card">
-          <div class="card-head">
-            <h3>最近入库</h3>
-            <span>实时动态</span>
-          </div>
-          <div v-if="overview.recent_posts?.length" class="feed">
-            <article
-              v-for="post in overview.recent_posts.slice(0, 8)"
-              :key="post.id"
-              class="feed-item"
-            >
-              <header>
-                <b>{{ post.topic || '未分类' }}</b>
-                <span>{{ platformLabel(post.platform) }}</span>
-                <em
-                  :style="{
-                    color: sentimentColor[post.sentiment_label] || '#64748b',
-                  }"
-                >
-                  {{ sentimentMap[post.sentiment_label] || post.sentiment_label || '—' }}
-                </em>
-              </header>
-              <p v-if="videoTitle(post)" class="feed-sub">{{ videoTitle(post) }}</p>
-              <p class="feed-text">{{ post.text }}</p>
-              <footer>
-                <time>{{ formatDateTime(post.fetched_at || post.published_at) }}</time>
-                <a
-                  v-if="post.source_url"
-                  :href="post.source_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink :size="12" />
-                  原帖
-                </a>
-              </footer>
-            </article>
-          </div>
-          <div v-else class="empty">还没有帖子。请打开「监测」采集。</div>
-        </section>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
+.overview-page {
+  color: var(--text-primary);
+}
+.overview-page.is-filled {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--topbar-h) - 2.75rem);
+  min-height: 0;
+  overflow: hidden;
+}
+.overview-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 0.55rem;
+}
+
 .first-run {
   max-width: 40rem;
-  padding: 1.25rem 1.35rem 1.4rem;
 }
 .first-run h3 {
   margin: 0 0 0.35rem;
@@ -609,168 +558,167 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   line-height: 1.45;
 }
-.overview-screen {
-  color: var(--text-primary);
+
+.overview-page .kpi-grid {
+  margin-bottom: 0;
+}
+.overview-page .kpi-foot {
+  margin: 0.2rem 0 0;
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  line-height: 1.25;
 }
 
-.screen-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 1rem;
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--color-border);
-}
-.screen-title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-.screen-sub {
-  margin: 0.25rem 0 0;
-  font-size: 0.8rem;
+.panel-meta {
+  font-size: 0.75rem;
   color: var(--text-tertiary);
+  font-weight: 400;
 }
-.screen-meta {
+.panel-link {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
 }
-.live-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #16a34a;
+.panel-link:hover {
+  text-decoration: underline;
 }
 
-.kpi-row {
+.main-row,
+.detail-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
+  gap: 0.55rem;
+  min-height: 0;
+  align-items: stretch;
 }
-.kpi-card {
-  position: relative;
-  padding: 0.9rem 1rem;
-  border-radius: var(--radius-lg);
-  background: #fff;
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-panel);
-  overflow: hidden;
+.main-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
 }
-.kpi-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--color-primary);
+.detail-row {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
 }
-.kpi-card.accent-pos::before {
-  background: #16a34a;
+.main-row > .panel,
+.main-side > .panel,
+.detail-row > .panel {
+  margin-bottom: 0;
+  padding: 0.7rem 0.85rem;
 }
-.kpi-card.accent-neg::before {
-  background: #dc2626;
-}
-.kpi-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--text-tertiary);
-  font-size: 0.78rem;
+.overview-page :deep(.panel-head) {
+  min-height: 22px;
   margin-bottom: 0.45rem;
 }
-.kpi-num {
-  font-family: var(--font-mono);
-  font-size: 1.65rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-  color: var(--text-primary);
-}
-.kpi-num.sm {
-  font-size: 1.35rem;
-}
-.kpi-num.pos {
-  color: #16a34a;
-}
-.kpi-num.neg {
-  color: #dc2626;
-}
-.kpi-foot {
-  margin-top: 0.35rem;
-  font-size: 0.72rem;
-  color: var(--text-tertiary);
-}
-
-.viz-grid {
+.main-side {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.15fr;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-}
-.bottom-grid {
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 0.75rem;
-}
-
-.screen-card {
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-panel);
-  padding: 0.85rem 0.95rem 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
-.card-head {
+.fill-panel,
+.feed-panel {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
 }
-.card-head h3 {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 650;
-  color: var(--text-primary);
-}
-.card-head span {
-  font-size: 0.72rem;
-  color: var(--text-tertiary);
+.fill-panel .panel-head,
+.feed-panel .panel-head {
+  flex-shrink: 0;
 }
 
 .chart {
-  height: 260px;
   width: 100%;
 }
-.chart-tall,
-.chart-trend {
-  height: 280px;
+.chart-fill {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
-.empty {
+.rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.15rem;
+}
+.rank-list li {
+  display: grid;
+  grid-template-columns: 1.2rem 1fr;
+  gap: 0.45rem;
+  align-items: center;
+  flex: 1;
+  min-height: 0;
+}
+.rank-idx {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-align: center;
+}
+.rank-body {
+  min-width: 0;
+}
+.rank-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.2rem;
+}
+.rank-name {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-top b {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.rank-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+.rank-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--color-primary);
+  opacity: 0.8;
+}
+
+.feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.empty-hint {
+  margin: 0;
+  flex: 1;
   display: grid;
   place-items: center;
-  min-height: 180px;
   color: var(--text-tertiary);
   font-size: 0.85rem;
 }
 
-.feed {
-  max-height: 280px;
-  overflow: auto;
-}
 .feed-item {
-  padding: 0.65rem 0;
+  padding: 0.45rem 0;
   border-bottom: 1px solid var(--color-border);
 }
 .feed-item:last-child {
@@ -779,24 +727,22 @@ onBeforeUnmount(() => {
 .feed-item header {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.35rem;
   align-items: center;
-  margin-bottom: 0.25rem;
-  font-size: 0.78rem;
+  margin-bottom: 0.15rem;
+  font-size: 0.75rem;
 }
 .feed-item header b {
   color: var(--text-primary);
-}
-.feed-item header span {
-  color: var(--text-tertiary);
+  font-weight: 600;
 }
 .feed-item header em {
   font-style: normal;
   font-weight: 600;
 }
 .feed-sub {
-  margin: 0 0 0.2rem;
-  font-size: 0.72rem;
+  margin: 0 0 0.1rem;
+  font-size: 0.7rem;
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -804,8 +750,8 @@ onBeforeUnmount(() => {
 }
 .feed-text {
   margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  font-size: 0.78rem;
+  line-height: 1.4;
   color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -813,18 +759,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .feed-item footer {
-  margin-top: 0.35rem;
+  margin-top: 0.2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--text-tertiary);
 }
 .feed-item footer a {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
   color: var(--color-primary);
   text-decoration: none;
 }
@@ -832,22 +777,30 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 
-@media (max-width: 1200px) {
-  .kpi-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+@media (max-width: 1100px) {
+  .overview-page.is-filled {
+    height: auto;
+    overflow: visible;
   }
-  .viz-grid,
-  .bottom-grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 800px) {
-  .kpi-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .screen-head {
+  .overview-body {
+    display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    height: auto;
+  }
+  .main-row,
+  .main-side,
+  .detail-row {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .chart-fill {
+    min-height: 200px;
+  }
+  .rank-list {
+    min-height: 180px;
+  }
+  .feed {
+    max-height: 260px;
   }
 }
 </style>

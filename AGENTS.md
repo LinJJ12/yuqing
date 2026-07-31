@@ -9,7 +9,8 @@
 - 流程与架构图：[`docs/diagrams.md`](docs/diagrams.md)
 - 演示就绪（模型缓存）：[`docs/model-cache.md`](docs/model-cache.md)
 - 真实采集（B 站内嵌 / 质量门禁 / MediaCrawler）：[`docs/real-data-collection.md`](docs/real-data-collection.md)
-- 合并方案：[`.trellis/MERGE_PLAN.md`](.trellis/MERGE_PLAN.md)
+- 合并方案（历史）：[`.trellis/MERGE_PLAN.md`](.trellis/MERGE_PLAN.md) · [`.trellis/GATE.md`](.trellis/GATE.md)
+- Trellis 工作流：[`.trellis/workflow.md`](.trellis/workflow.md)
 - 后端分层：[`backend/src/README.md`](backend/src/README.md)
 
 启动：
@@ -20,3 +21,25 @@ cd frontend; npm run dev
 ```
 
 改接口时：同步 `backend/src/api/` 与 `frontend/src/api/`。
+
+<!-- TRELLIS:START -->
+# Trellis Instructions
+
+These instructions are for AI assistants working in this project.
+
+This project is managed by Trellis. The working knowledge you need lives under `.trellis/`:
+
+- `.trellis/workflow.md` — development phases, when to create tasks, skill routing
+- `.trellis/spec/` — package- and layer-scoped coding guidelines (read before writing code in a given layer)
+- `.trellis/workspace/` — per-developer journals and session traces
+- `.trellis/tasks/` — active and archived tasks (PRDs, research, jsonl context)
+
+If a Trellis command is available on your platform (e.g. `/trellis:finish-work`, `/trellis:continue`), prefer it over manual steps. Not every platform exposes every command.
+
+If you're using Codex or another agent-capable tool, additional project-scoped helpers may live in:
+- `.agents/skills/` — reusable Trellis skills
+- `.codex/agents/` — optional custom subagents
+
+Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
+
+<!-- TRELLIS:END -->

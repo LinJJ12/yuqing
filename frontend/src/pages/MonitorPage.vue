@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Download, Upload } from '@lucide/vue'
-import PageHeader from '../components/PageHeader.vue'
 import CollapsiblePanel from '../components/CollapsiblePanel.vue'
 import { collectBilibili, deletePosts, fetchImports, uploadImport } from '../api/client'
 import { formatDateTime } from '../lib/datetime'
@@ -245,12 +244,6 @@ onMounted(async () => {
 
 <template>
   <div class="page monitor-page">
-    <PageHeader title="舆情监测" subtitle="采集 / 导入 / 清理 → 再到「入库」浏览">
-      <template #actions>
-        <RouterLink class="btn btn-secondary btn-sm" to="/inbox">查看入库</RouterLink>
-      </template>
-    </PageHeader>
-
     <section class="panel work-panel">
       <div class="ui-tabs">
         <div class="ui-tabs-nav" role="tablist">
@@ -281,6 +274,7 @@ onMounted(async () => {
           >
             数据清理
           </button>
+          <RouterLink class="btn btn-secondary btn-sm tabs-action" to="/inbox">查看入库</RouterLink>
         </div>
 
         <div v-show="workTab === 'collect'" class="ui-tabs-body">
@@ -386,7 +380,7 @@ onMounted(async () => {
               >
                 查看口碑 →
               </RouterLink>
-              <RouterLink class="link-out" to="/sentiment">去情感页看进度 →</RouterLink>
+              <RouterLink class="link-out" to="/insights">去洞察页看进度 →</RouterLink>
             </div>
           </div>
           <p v-if="biliError" class="err status-line">{{ biliError }}</p>
@@ -504,6 +498,11 @@ onMounted(async () => {
 <style scoped>
 .work-panel {
   padding-top: 0.65rem;
+}
+.tabs-action {
+  margin-left: auto;
+  margin-bottom: 0.35rem;
+  flex-shrink: 0;
 }
 .work-form {
   max-width: 40rem;

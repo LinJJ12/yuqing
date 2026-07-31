@@ -17,6 +17,7 @@
 | 数据怎么流、架构长什么样？ | [`diagrams.md`](./diagrams.md) |
 | 演示前模型怎么准备？ | [`model-cache.md`](./model-cache.md) |
 | 真实 B 站数据怎么采？ | [`real-data-collection.md`](./real-data-collection.md) |
+| Trellis / AI 协作怎么用？ | [`../.trellis/README.md`](../.trellis/README.md) |
 
 ## 文件
 

@@ -38,6 +38,7 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+frontend/.tmp-agent-test/
 .DS_Store
 Thumbs.db
 .idea/

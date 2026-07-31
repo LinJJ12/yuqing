@@ -11,12 +11,11 @@ import {
   overridePostSentiment,
 } from '../api/client'
 import * as echarts from 'echarts'
-import PageHeader from '../components/PageHeader.vue'
 import CollapsiblePanel from '../components/CollapsiblePanel.vue'
 import VideoScopePicker from '../components/VideoScopePicker.vue'
 import { formatDateTime } from '../lib/datetime'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 const route = useRoute()
 const router = useRouter()
 const activeBvid = computed(() => String(route.query.bvid || '').trim())
@@ -379,20 +378,41 @@ async function onRefreshReview() {
   }
 }
 
+function applyPostUpdate(postId, updated) {
+  if (!updated) return
+  const idx = reviewPosts.value.findIndex((p) => p.id === postId)
+  if (idx >= 0) {
+    reviewPosts.value[idx] = updated.id ? updated : { ...reviewPosts.value[idx], ...updated }
+  }
+  const items = alerts.value?.items
+  if (!items) return
+  const aIdx = items.findIndex((a) => a.post_id === postId)
+  if (aIdx < 0) return
+  const cur = items[aIdx]
+  items[aIdx] = {
+    ...cur,
+    sentiment_label: updated.sentiment_label ?? cur.sentiment_label,
+    sentiment_method: updated.sentiment_method ?? cur.sentiment_method,
+    sentiment_confidence:
+      updated.sentiment_confidence != null ? updated.sentiment_confidence : cur.sentiment_confidence,
+  }
+}
+
 async function onManualOverride(post, label) {
+  const postId = Number(post.post_id ?? post.id)
+  if (!Number.isFinite(postId) || postId <= 0) return
   if (!label || (label === post.sentiment_label && post.sentiment_method === 'manual')) return
-  reviewBusyId.value = post.id
+  reviewBusyId.value = postId
   error.value = ''
   try {
-    const res = await overridePostSentiment(post.id, { label, method: 'manual' })
+    const res = await overridePostSentiment(postId, { label, method: 'manual' })
     if (!res.ok) {
       error.value = res.error?.message || '改判失败'
       message.value = ''
       return
     }
-    const idx = reviewPosts.value.findIndex((p) => p.id === post.id)
-    if (idx >= 0) reviewPosts.value[idx] = res.data?.id ? res.data : { ...post, ...res.data }
-    message.value = `已人工改判 #${post.id} → ${labelMap[label] || label}；可切到「预警列表」核对`
+    applyPostUpdate(postId, res.data?.id ? res.data : { ...post, ...res.data, id: postId })
+    message.value = `已人工改判 #${postId} → ${labelMap[label] || label}`
     try {
       await refreshAlertsAndTrend()
     } catch (e) {
@@ -407,21 +427,22 @@ async function onManualOverride(post, label) {
 }
 
 async function onLlmReview(post) {
-  reviewBusyId.value = post.id
+  const postId = Number(post.post_id ?? post.id)
+  if (!Number.isFinite(postId) || postId <= 0) return
+  reviewBusyId.value = postId
   error.value = ''
-  message.value = `正在智能复判 #${post.id}…`
+  message.value = `正在智能复判 #${postId}…`
   try {
-    const res = await llmReviewSentiment({ post_id: post.id, apply: true })
+    const res = await llmReviewSentiment({ post_id: postId, apply: true })
     if (!res.ok) {
       error.value = res.error?.message || '智能复判失败'
       message.value = ''
       return
     }
     const updated = res.data.post || res.data
-    const idx = reviewPosts.value.findIndex((p) => p.id === post.id)
-    if (idx >= 0 && updated?.id) reviewPosts.value[idx] = updated
+    applyPostUpdate(postId, updated?.id ? updated : { ...updated, id: postId })
     const lab = res.data.sentiment_label || updated?.sentiment_label
-    message.value = `智能复判 #${post.id} → ${labelMap[lab] || lab}${res.data.reason ? `（${res.data.reason}）` : ''}；可切到「预警列表」核对`
+    message.value = `智能复判 #${postId} → ${labelMap[lab] || lab}${res.data.reason ? `（${res.data.reason}）` : ''}`
     try {
       await refreshAlertsAndTrend()
     } catch (e) {
@@ -433,6 +454,30 @@ async function onLlmReview(post) {
   } finally {
     reviewBusyId.value = null
   }
+}
+
+function openInReview(postId) {
+  if (!postId) return
+  const post = reviewPosts.value.find((p) => p.id === postId)
+  setListTab('review')
+  if (!post) {
+    message.value = `帖子 #${postId} 不在当前难例列表（多为高置信负面）；可直接在预警项改判`
+    return
+  }
+  const label = post.sentiment_label || 'unknown'
+  if (sentimentFilter.value !== 'all' && sentimentFilter.value !== label) {
+    sentimentFilter.value = 'all'
+  }
+  nextTick(() => {
+    const idx = filteredReviewPosts.value.findIndex((p) => p.id === postId)
+    if (idx >= 0) reviewPage.value = Math.floor(idx / PAGE_SIZE) + 1
+    nextTick(() => {
+      document.getElementById(`review-post-${postId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+  })
 }
 
 watch(activeBvid, () => {
@@ -465,16 +510,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page">
-    <PageHeader title="预警中心" subtitle="预警处置 · 难例改判 · 热度趋势">
+    <VideoScopePicker :disabled="busy">
       <template #actions>
         <button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="refresh">
           <RefreshCw :size="14" />
           刷新
         </button>
       </template>
-    </PageHeader>
-
-    <VideoScopePicker :disabled="busy" />
+    </VideoScopePicker>
 
     <p v-if="message" class="ok-text" style="margin: 0 0 0.5rem">{{ message }}</p>
     <p v-if="error" class="err" style="margin: 0 0 0.5rem">{{ error }}</p>
@@ -562,43 +605,92 @@ onBeforeUnmount(() => {
           </div>
 
           <p v-if="filteredAlerts.length" class="hint pager-range">
-            显示 {{ alertPageFrom }}–{{ alertPageTo }} / {{ filteredAlerts.length }} · 只读，改标签请切「难例改判」
+            显示 {{ alertPageFrom }}–{{ alertPageTo }} / {{ filteredAlerts.length }} ·
+            有帖子的预警可直接改判，改完后若不再触发会从列表消失
           </p>
 
-          <div v-if="pagedAlerts.length" class="alert-scroll">
+          <div v-if="pagedAlerts.length" class="alert-list">
             <article
               v-for="item in pagedAlerts"
               :key="item.id"
               class="alert-item"
               :class="item.severity"
             >
-              <header class="post-meta">
-                <b>{{ item.title }}</b>
-                <span class="pill" :class="severityPill[item.severity] || 'pill-default'">
-                  {{ severityMap[item.severity] || item.severity }}
-                </span>
-                <em>{{ formatDateTime(item.created_at) }}</em>
+              <header class="alert-head">
+                <div class="alert-title-row">
+                  <b class="alert-title">{{ item.title }}</b>
+                  <span class="pill" :class="severityPill[item.severity] || 'pill-default'">
+                    {{ severityMap[item.severity] || item.severity }}
+                  </span>
+                  <span
+                    v-if="item.sentiment_label"
+                    class="pill"
+                    :class="sentimentPillClass(item.sentiment_label)"
+                  >
+                    {{ labelMap[item.sentiment_label] || item.sentiment_label }}
+                  </span>
+                  <span v-if="item.sentiment_method" class="pill pill-default">
+                    {{ methodMap[item.sentiment_method] || item.sentiment_method }}
+                  </span>
+                </div>
+                <time class="alert-time">{{ formatDateTime(item.created_at) }}</time>
               </header>
-              <p>{{ item.message }}</p>
-              <small v-if="item.keywords?.length">关键词：{{ item.keywords.join('、') }}</small>
-              <div class="alert-links">
-                <RouterLink
-                  v-if="item.bvid"
-                  class="link-out"
-                  :to="{ path: '/reports', query: { bvid: item.bvid } }"
-                >
-                  看口碑
-                </RouterLink>
-                <a
-                  v-if="item.source_url"
-                  class="link-out"
-                  :href="item.source_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  原评
-                </a>
-              </div>
+              <p class="alert-msg">{{ item.message }}</p>
+              <footer class="alert-foot">
+                <div class="alert-meta-line">
+                  <small v-if="item.keywords?.length" class="alert-kw">
+                    关键词：{{ item.keywords.join('、') }}
+                  </small>
+                  <div class="alert-links">
+                    <RouterLink
+                      v-if="item.bvid"
+                      class="link-out"
+                      :to="{ path: '/reports', query: { bvid: item.bvid } }"
+                    >
+                      看口碑
+                    </RouterLink>
+                    <a
+                      v-if="item.source_url"
+                      class="link-out"
+                      :href="item.source_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      原评
+                    </a>
+                    <button
+                      v-if="item.post_id"
+                      type="button"
+                      class="link-out link-btn"
+                      @click="openInReview(item.post_id)"
+                    >
+                      到难例
+                    </button>
+                  </div>
+                </div>
+                <div v-if="item.post_id" class="review-actions">
+                  <select
+                    class="input review-select"
+                    :value="item.sentiment_label || ''"
+                    :disabled="reviewBusyId === item.post_id"
+                    @change="onManualOverride(item, $event.target.value)"
+                  >
+                    <option disabled value="">改判为…</option>
+                    <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    :disabled="reviewBusyId === item.post_id"
+                    @click="onLlmReview(item)"
+                  >
+                    智能复判
+                  </button>
+                </div>
+                <p v-else class="hint alert-no-post">量级预警，无需改判</p>
+              </footer>
             </article>
           </div>
           <p v-else class="hint">
@@ -608,7 +700,7 @@ onBeforeUnmount(() => {
               暂无预警。建议路径：
               <RouterLink to="/monitor">监测</RouterLink>
               采 BV →
-              <RouterLink to="/sentiment">情感</RouterLink>
+              <RouterLink to="/insights">洞察</RouterLink>
               跑完 → 再回到此页核对。
             </template>
             <template v-else>
@@ -640,7 +732,7 @@ onBeforeUnmount(() => {
         <div v-show="listTab === 'review'" class="ui-tabs-body">
           <div class="toolbar" style="margin-bottom: 0.65rem">
             <p class="hint" style="margin: 0">
-              按情感浏览并改判；人工与智能复判不会被后续模型覆盖。改完可切回「预警列表」核对。
+              低置信难例集中改判；预警列表里关联帖子也可直接改。人工与智能复判不会被后续模型覆盖。
             </p>
             <button
               type="button"
@@ -669,40 +761,51 @@ onBeforeUnmount(() => {
             显示 {{ reviewPageFrom }}–{{ reviewPageTo }} / {{ filteredReviewPosts.length }}
           </p>
 
-          <div v-if="pagedReviewPosts.length" class="post-list review-scroll">
-            <article v-for="item in pagedReviewPosts" :key="item.id" class="post-item">
-              <header class="post-meta">
-                <b>#{{ item.id }}</b>
-                <span class="pill" :class="sentimentPillClass(item.sentiment_label)">
-                  {{ labelMap[item.sentiment_label] || item.sentiment_label || '未标注' }}
-                </span>
-                <span class="pill pill-default">
-                  {{ methodMap[item.sentiment_method] || item.sentiment_method || '—' }}
-                </span>
-                <em v-if="item.sentiment_confidence != null">置信 {{ item.sentiment_confidence }}</em>
+          <div v-if="pagedReviewPosts.length" class="post-list alert-list">
+            <article
+              v-for="item in pagedReviewPosts"
+              :id="`review-post-${item.id}`"
+              :key="item.id"
+              class="alert-item review-item"
+            >
+              <header class="alert-head">
+                <div class="alert-title-row">
+                  <b class="alert-title">#{{ item.id }}</b>
+                  <span class="pill" :class="sentimentPillClass(item.sentiment_label)">
+                    {{ labelMap[item.sentiment_label] || item.sentiment_label || '未标注' }}
+                  </span>
+                  <span class="pill pill-default">
+                    {{ methodMap[item.sentiment_method] || item.sentiment_method || '—' }}
+                  </span>
+                  <em v-if="item.sentiment_confidence != null" class="alert-conf">
+                    置信 {{ item.sentiment_confidence }}
+                  </em>
+                </div>
               </header>
-              <p>{{ item.text }}</p>
-              <div class="review-actions">
-                <select
-                  class="input review-select"
-                  :value="item.sentiment_label || ''"
-                  :disabled="reviewBusyId === item.id"
-                  @change="onManualOverride(item, $event.target.value)"
-                >
-                  <option disabled value="">改判为…</option>
-                  <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  :disabled="reviewBusyId === item.id"
-                  @click="onLlmReview(item)"
-                >
-                  智能复判
-                </button>
-              </div>
+              <p class="alert-msg">{{ item.text }}</p>
+              <footer class="alert-foot alert-foot-actions">
+                <div class="review-actions">
+                  <select
+                    class="input review-select"
+                    :value="item.sentiment_label || ''"
+                    :disabled="reviewBusyId === item.id"
+                    @change="onManualOverride(item, $event.target.value)"
+                  >
+                    <option disabled value="">改判为…</option>
+                    <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    :disabled="reviewBusyId === item.id"
+                    @click="onLlmReview(item)"
+                  >
+                    智能复判
+                  </button>
+                </div>
+              </footer>
             </article>
           </div>
           <p v-else class="hint">
@@ -710,7 +813,7 @@ onBeforeUnmount(() => {
               bootLoading || reviewLoading
                 ? '加载中…'
                 : sentimentFilter === 'all'
-                  ? '暂无待浏览帖子。请先在情感页跑批分析。'
+                  ? '暂无待浏览帖子。请先在洞察页跑批分析。'
                   : `当前筛选下暂无「${labelMap[sentimentFilter]}」帖子`
             }}
           </p>
@@ -763,12 +866,6 @@ onBeforeUnmount(() => {
 .pager-range {
   margin: 0 0 0.65rem;
 }
-.alert-scroll,
-.review-scroll {
-  max-height: min(52vh, 30rem);
-  overflow: auto;
-  padding-right: 0.15rem;
-}
 .tab-count {
   display: inline-flex;
   align-items: center;
@@ -805,40 +902,165 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
 }
 
+.alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
 .alert-item {
-  padding: 0.85rem 0;
-  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.8rem 0.95rem 0.8rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  border-left: 3px solid var(--color-border-strong);
+  transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out),
+    background 140ms var(--ease-out);
 }
-.alert-item:last-child {
-  border-bottom: none;
+.alert-item:hover {
+  background: #fff;
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-sm);
 }
-.alert-item.high b {
+.alert-item.high {
+  border-left-color: var(--color-destructive);
+  background: rgba(220, 38, 38, 0.035);
+}
+.alert-item.high:hover {
+  background: rgba(220, 38, 38, 0.05);
+}
+.alert-item.medium {
+  border-left-color: var(--color-warning);
+  background: rgba(217, 119, 6, 0.035);
+}
+.alert-item.medium:hover {
+  background: rgba(217, 119, 6, 0.05);
+}
+.alert-item.low {
+  border-left-color: var(--color-primary);
+}
+.alert-item.high .alert-title {
   color: var(--color-destructive);
 }
-.alert-item p {
-  margin: 0.35rem 0;
+.alert-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+.alert-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.4rem;
+  min-width: 0;
+}
+.alert-title {
+  font-weight: 650;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+.alert-time,
+.alert-conf {
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.alert-msg {
+  margin: 0;
   color: var(--text-secondary);
+  line-height: 1.6;
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+.alert-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--color-border);
+  margin-top: 0.1rem;
+}
+.alert-foot-actions {
+  justify-content: flex-end;
+}
+.alert-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.85rem;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+.alert-kw {
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
 }
 .alert-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.35rem;
-}
-.alert-item small {
-  color: var(--text-tertiary);
-  font-size: 0.8rem;
-}
-
-.review-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-top: 0.55rem;
+  gap: 0.65rem;
   align-items: center;
 }
+.link-out {
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  text-decoration: none;
+  font-weight: 500;
+}
+.link-out:hover {
+  text-decoration: underline;
+  color: var(--color-primary);
+}
+.link-btn {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.alert-foot-actions .review-actions {
+  margin-left: 0;
+}
 .review-select {
-  max-width: 9rem;
-  min-height: 2.1rem;
+  width: 7.5rem;
+  min-height: 1.9rem;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.8rem;
+}
+.alert-no-post {
+  margin: 0 0 0 auto;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 640px) {
+  .alert-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .review-actions,
+  .alert-no-post {
+    margin-left: 0;
+  }
+  .review-select {
+    flex: 1;
+    width: auto;
+  }
 }
 </style>

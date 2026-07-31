@@ -222,6 +222,7 @@ class Store:
         platform: str | None = None,
         label: str | None = None,
         bvid: str | None = None,
+        q: str | None = None,
     ) -> int:
         clauses: list[str] = []
         values: list[Any] = []
@@ -235,6 +236,7 @@ class Store:
             clauses.append("sentiment_label = ?")
             values.append(label)
         self._append_bvid_clause(clauses, values, bvid)
+        self._append_search_clause(clauses, values, q)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self.connect() as conn:
             row = conn.execute(
@@ -242,6 +244,23 @@ class Store:
                 values,
             ).fetchone()
         return int(row["c"])
+
+    @staticmethod
+    def _append_search_clause(
+        clauses: list[str], values: list[Any], q: str | None
+    ) -> None:
+        key = (q or "").strip()
+        if not key:
+            return
+        # 用户输入按字面匹配，避免 % / _ 被当成 LIKE 通配符
+        escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{escaped}%"
+        clauses.append(
+            "(text LIKE ? ESCAPE '\\' OR IFNULL(topic, '') LIKE ? ESCAPE '\\' "
+            "OR IFNULL(author, '') LIKE ? ESCAPE '\\' "
+            "OR IFNULL(source_url, '') LIKE ? ESCAPE '\\')"
+        )
+        values.extend([like, like, like, like])
 
     def list_posts(
         self,
@@ -256,6 +275,7 @@ class Store:
         label: str | None = None,
         order: str = "fetched",
         bvid: str | None = None,
+        q: str | None = None,
     ) -> list[dict]:
         clauses: list[str] = []
         values: list[Any] = []
@@ -281,6 +301,7 @@ class Store:
             clauses.append("sentiment_label = ?")
             values.append(label)
         self._append_bvid_clause(clauses, values, bvid)
+        self._append_search_clause(clauses, values, q)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         # 默认按入库时间，避免样例假发布时间压过真实采集
         if order == "published":
@@ -308,6 +329,166 @@ class Store:
                 "SELECT * FROM posts WHERE id = ?", (post_id,)
             ).fetchone()
         return self._post_row(row) if row else None
+
+    def create_post(
+        self,
+        *,
+        text: str,
+        platform: str = "campus",
+        topic: str | None = None,
+        author: str = "",
+        source_url: str | None = None,
+        source_id: str | None = None,
+        bvid: str | None = None,
+        video_title: str | None = None,
+        sentiment_label: str | None = None,
+    ) -> dict:
+        body = (text or "").strip()
+        if not body:
+            raise ValueError("正文不能为空")
+        plat = (platform or "campus").strip() or "campus"
+        sid = (source_id or "").strip() or f"manual-{uuid.uuid4().hex[:12]}"
+        raw: dict[str, Any] = {"extra": {}}
+        if (bvid or "").strip():
+            raw["extra"]["bvid"] = bvid.strip()
+        if (video_title or "").strip():
+            raw["extra"]["video_title"] = video_title.strip()
+        label = (sentiment_label or "").strip().lower() or None
+        allowed = {"positive", "neutral", "negative", "uncertain"}
+        if label and label not in allowed:
+            raise ValueError("sentiment_label 必须是 positive / neutral / negative / uncertain")
+        score_map = {"positive": 1, "neutral": 0, "negative": -1, "uncertain": 0}
+        method = "manual" if label else None
+        conf = 1.0 if label else None
+        score = score_map[label] if label else None
+        with self.connect() as conn:
+            cur = conn.execute(
+                """INSERT INTO posts(
+                    platform, source_id, author, text, published_at,
+                    engagement_json, fetched_at, import_job_id, source_url,
+                    topic, sentiment, sentiment_label, sentiment_method,
+                    sentiment_confidence, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    plat,
+                    sid,
+                    (author or "").strip(),
+                    body,
+                    None,
+                    _dump({}),
+                    utc_now(),
+                    None,
+                    (source_url or "").strip() or None,
+                    (topic or "").strip() or None,
+                    score,
+                    label,
+                    method,
+                    conf,
+                    _dump(raw),
+                ),
+            )
+            post_id = int(cur.lastrowid)
+        post = self.get_post(post_id)
+        if not post:
+            raise RuntimeError("创建后读取失败")
+        return post
+
+    def update_post(
+        self,
+        post_id: int,
+        *,
+        text: str | None = None,
+        platform: str | None = None,
+        topic: str | None = None,
+        author: str | None = None,
+        source_url: str | None = None,
+        bvid: str | None = None,
+        video_title: str | None = None,
+        clear_topic: bool = False,
+        clear_source_url: bool = False,
+    ) -> dict | None:
+        existing = self.get_post(post_id)
+        if not existing:
+            return None
+        fields: list[str] = []
+        values: list[Any] = []
+        if text is not None:
+            body = text.strip()
+            if not body:
+                raise ValueError("正文不能为空")
+            fields.append("text = ?")
+            values.append(body)
+        if platform is not None:
+            plat = platform.strip() or existing["platform"]
+            fields.append("platform = ?")
+            values.append(plat)
+        if topic is not None or clear_topic:
+            fields.append("topic = ?")
+            values.append(None if clear_topic else ((topic or "").strip() or None))
+        if author is not None:
+            fields.append("author = ?")
+            values.append(author.strip())
+        if source_url is not None or clear_source_url:
+            fields.append("source_url = ?")
+            values.append(
+                None if clear_source_url else ((source_url or "").strip() or None)
+            )
+
+        raw = dict(existing.get("raw") or {})
+        extra = dict(raw.get("extra") or {})
+        raw_changed = False
+        if bvid is not None:
+            key = bvid.strip()
+            if key:
+                extra["bvid"] = key
+            else:
+                extra.pop("bvid", None)
+            raw_changed = True
+        if video_title is not None:
+            title = video_title.strip()
+            if title:
+                extra["video_title"] = title
+            else:
+                extra.pop("video_title", None)
+            raw_changed = True
+        if raw_changed:
+            raw["extra"] = extra
+            fields.append("raw_json = ?")
+            values.append(_dump(raw))
+
+        if not fields:
+            return existing
+        values.append(post_id)
+        with self.connect() as conn:
+            conn.execute(
+                f"UPDATE posts SET {', '.join(fields)} WHERE id = ?",
+                values,
+            )
+        return self.get_post(post_id)
+
+    def delete_post(self, post_id: int) -> bool:
+        with self.connect() as conn:
+            cur = conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+            return cur.rowcount > 0
+
+    def delete_posts_by_ids(self, ids: list[int]) -> dict:
+        clean = sorted({int(i) for i in ids if int(i) > 0})
+        if not clean:
+            raise ValueError("请提供要删除的帖子 id")
+        placeholders = ",".join("?" for _ in clean)
+        with self.connect() as conn:
+            matched = conn.execute(
+                f"SELECT COUNT(*) AS c FROM posts WHERE id IN ({placeholders})",
+                clean,
+            ).fetchone()
+            count = int(matched["c"] or 0)
+            if count == 0:
+                return {"deleted": 0, "matched": 0, "ids": clean}
+            conn.execute(
+                f"DELETE FROM posts WHERE id IN ({placeholders})",
+                clean,
+            )
+        return {"deleted": count, "matched": count, "ids": clean}
 
     def list_review_posts(self, *, limit: int = 40, bvid: str | None = None) -> list[dict]:
         """难例优先：uncertain → 低置信 BERT → 最近帖。"""
@@ -666,9 +847,28 @@ class Store:
         video_title_contains: str | None = None,
         topic: str | None = None,
         platform: str | None = None,
+        ids: list[int] | None = None,
         dry_run: bool = False,
     ) -> dict:
         """按条件删除帖子。至少提供一个过滤条件。"""
+        if ids:
+            if dry_run:
+                clean = sorted({int(i) for i in ids if int(i) > 0})
+                with self.connect() as conn:
+                    if not clean:
+                        return {"deleted": 0, "matched": 0, "dry_run": True, "ids": []}
+                    placeholders = ",".join("?" for _ in clean)
+                    matched = conn.execute(
+                        f"SELECT COUNT(*) AS c FROM posts WHERE id IN ({placeholders})",
+                        clean,
+                    ).fetchone()
+                    return {
+                        "deleted": 0,
+                        "matched": int(matched["c"] or 0),
+                        "dry_run": True,
+                        "ids": clean,
+                    }
+            return {**self.delete_posts_by_ids(ids), "dry_run": False}
         clauses: list[str] = []
         values: list[Any] = []
         bvid_key = (bvid or "").strip()
@@ -690,7 +890,7 @@ class Store:
             clauses.append("platform = ?")
             values.append(platform_key)
         if not clauses:
-            raise ValueError("请至少指定 bvid、视频标题关键词、话题或平台之一")
+            raise ValueError("请至少指定 id、bvid、视频标题关键词、话题或平台之一")
         where = " AND ".join(clauses)
         with self.connect() as conn:
             matched = conn.execute(

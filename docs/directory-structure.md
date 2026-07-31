@@ -16,7 +16,8 @@ yuqing/
 ├── README.md              # 产品简介 + 如何启动
 ├── AGENTS.md              # AI/协作最短入口
 ├── docs/                  # 跨端约定（本文）
-├── .trellis/              # 合并方案与阶段门禁
+├── .trellis/              # Trellis 工作流 + 合并历史（MERGE_PLAN / GATE）
+├── .cursor/               # Trellis 生成的 Cursor 命令 / Agent / hooks
 ├── frontend/              # Vue 3 工作台
 ├── backend/               # FastAPI BFF
 ├── vendor/                # 参考仓（gitignore，只留 README）
@@ -27,7 +28,8 @@ yuqing/
 | 路径 | 一句话职责 | 禁止 |
 |------|------------|------|
 | `docs/` | 产品说明与跨端约定（PRD / 定位 / 目录 / 架构） | 运行时代码、密钥 |
-| `.trellis/` | 合并计划、Gate、阶段验收 | 产品运行时资源、业务算法 |
+| `.trellis/` | Trellis 工作流（tasks/spec/workflow）+ 合并历史 Gate | 产品运行时资源、业务算法 |
+| `.cursor/` | Trellis 为 Cursor 生成的命令 / skills / agents | 业务源码、密钥 |
 | `frontend/` | 界面、本机状态、调 BFF | 持有模型 Key、SQLite、推理 |
 | `backend/` | API、分析能力、持久化 | 页面组件、卡通/业务 CSS |
 | `vendor/` | 第三方参考实现（只读） | `import` 进生产路径 |
@@ -111,7 +113,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | [`model-cache.md`](./model-cache.md) | 演示就绪：模型预取 / Ollama |
 | [`real-data-collection.md`](./real-data-collection.md) | 内嵌 B 站评论 + 质量门禁 + MediaCrawler |
 | [`directory-structure.md`](./directory-structure.md) | 目录与 API 垂直表（本文） |
-| [`../.trellis/README.md`](../.trellis/README.md) | 方案与门禁 |
+| [`../.trellis/README.md`](../.trellis/README.md) | Trellis 工作流 + 合并历史 |
 | [`../vendor/README.md`](../vendor/README.md) | 参考仓 |
 | [`../frontend/README.md`](../frontend/README.md) | 前端工程 |
 | [`../frontend/src/README.md`](../frontend/src/README.md) | 前端源码 |

@@ -67,10 +67,40 @@ export async function fetchPosts({
   order = 'fetched',
   label,
   bvid,
+  q,
 } = {}) {
   const { data } = await withFallback(api, 'get', '/posts', {
-    params: { topic, platform, limit, offset, order, label, bvid: bvid || undefined },
+    params: {
+      topic,
+      platform,
+      limit,
+      offset,
+      order,
+      label,
+      bvid: bvid || undefined,
+      q: q || undefined,
+    },
   })
+  return data
+}
+
+export async function fetchPost(postId) {
+  const { data } = await withFallback(api, 'get', `/posts/${postId}`)
+  return data
+}
+
+export async function createPost(payload) {
+  const { data } = await withFallback(api, 'post', '/posts', { data: payload })
+  return data
+}
+
+export async function updatePost(postId, payload) {
+  const { data } = await withFallback(api, 'patch', `/posts/${postId}`, { data: payload })
+  return data
+}
+
+export async function deletePost(postId) {
+  const { data } = await withFallback(api, 'delete', `/posts/${postId}`)
   return data
 }
 
@@ -265,6 +295,11 @@ export async function deletePosts(payload) {
     data: payload,
   })
   return data
+}
+
+/** 按 id 列表批量删除 */
+export async function deletePostsByIds(ids) {
+  return deletePosts({ ids })
 }
 
 export async function collectBilibili(payload) {

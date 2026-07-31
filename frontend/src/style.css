@@ -688,6 +688,11 @@ pre {
   margin-bottom: 0.85rem;
   flex-wrap: wrap;
 }
+.page-header.actions-only {
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 0.65rem;
+}
 .page-header-text {
   min-width: 0;
 }

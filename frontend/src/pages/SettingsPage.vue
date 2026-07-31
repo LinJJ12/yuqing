@@ -155,7 +155,7 @@ onMounted(refresh)
           · 采完 BV 后去
           <RouterLink to="/monitor">监测</RouterLink>
           /
-          <RouterLink to="/sentiment">情感</RouterLink>
+          <RouterLink to="/insights">洞察</RouterLink>
           /
           <RouterLink to="/reports">报告</RouterLink>
         </p>
@@ -266,12 +266,8 @@ onMounted(refresh)
         <h4>功能说明</h4>
         <ul class="stack-list">
           <li>
-            <span>情感分析</span>
-            <b>正面 / 中性 / 负面</b>
-          </li>
-          <li>
-            <span>热点话题</span>
-            <b>词云 + 主题聚类</b>
+            <span>洞察</span>
+            <b>情感跑批 · 分布 · 词云 / 主题</b>
           </li>
           <li>
             <span>预警规则</span>

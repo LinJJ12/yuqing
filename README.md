@@ -93,8 +93,8 @@ npm run dev
 |------|------|
 | `/` | 总览（空库时为首跑三步引导） |
 | `/monitor` | 舆情监测（贴 BV / 导入 / 清理） |
-| `/sentiment` | 情感分析 |
-| `/topics` | 热点话题 |
+| `/inbox` | 入库浏览（搜索 · 增删改 · 改判） |
+| `/insights` | 洞察（情感 · 词云话题；旧 `/sentiment` `/topics` 会重定向） |
 | `/alerts` | 预警中心 |
 | `/reports` | 分析报告（单视频口碑 · 全局导出） |
 | `/agent` | 智能助手 |
@@ -127,12 +127,15 @@ uv run python backend/scripts/generate_sample_data.py
 ### 测试
 
 ```powershell
-# 后端（需先 uv sync --extra dev）
-uv run pytest -q
+# 后端（需先 uv sync --extra dev；用例在 backend/tests，已忽略 vendor）
+uv run pytest
+# 更完整的手工冒烟（含导出 / Agent 等）
+uv run python backend/scripts/smoke_test.py
 
 # 前端
 cd frontend
 npm run build
+node scripts/agent-session-check.mjs
 ```
 
 ---
@@ -145,7 +148,8 @@ npm run build
 | `backend/` | 分析 BFF（FastAPI） |
 | `backend/scripts/` | 样例生成、模型预取等 |
 | `docs/` | PRD、定位、架构图、目录约定、采集 / 模型 |
-| `.trellis/` | 合并方案与 Gate |
+| `.trellis/` | Trellis 工作流 + 合并历史 Gate |
+| `.cursor/` | Trellis → Cursor 命令 / Agent |
 | `vendor/` | 第三方参考（本地，勿当运行时） |
 
 ---
@@ -176,6 +180,18 @@ npm run build
 
 详情：[`docs/prd.md`](docs/prd.md) · [`docs/positioning.md`](docs/positioning.md) · [`.trellis/GATE.md`](.trellis/GATE.md)
 
+### Trellis（AI 协作）
+
+已安装 [`@mindfoldhq/trellis`](https://github.com/mindfold-ai/Trellis) 并初始化 Cursor 平台。说明见 [`.trellis/README.md`](.trellis/README.md)。
+
+```powershell
+npm install -g @mindfoldhq/trellis@latest
+# Windows 若找不到命令：
+& "$env:APPDATA\npm\trellis.cmd" platforms
+```
+
+Cursor 内可用：`/trellis-continue`、`/trellis-finish-work`；Agent：`trellis-implement` / `trellis-check` / `trellis-research`。
+
 ---
 
 ## 文档
@@ -190,6 +206,7 @@ npm run build
 - [后端说明](backend/README.md)
 - [前端说明](frontend/README.md)
 - [协作入口 AGENTS](AGENTS.md)
+- [Trellis 说明](.trellis/README.md)
 
 ---
 

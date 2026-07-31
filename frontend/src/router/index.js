@@ -20,16 +20,24 @@ const routes = [
     meta: { title: '入库浏览', subtitle: '按平台筛选 · 翻页查看' },
   },
   {
+    path: '/insights',
+    name: 'insights',
+    component: () => import('../pages/InsightsPage.vue'),
+    meta: { title: '洞察', subtitle: '情感分布 · 词云话题 · 跑批' },
+  },
+  {
     path: '/sentiment',
-    name: 'sentiment',
-    component: () => import('../pages/SentimentPage.vue'),
-    meta: { title: '情感分析', subtitle: '跑批 · 分布 · 单句预览' },
+    redirect: (to) => ({
+      path: '/insights',
+      query: { ...to.query, tab: 'sentiment' },
+    }),
   },
   {
     path: '/topics',
-    name: 'topics',
-    component: () => import('../pages/TopicsPage.vue'),
-    meta: { title: '热点话题', subtitle: '词云 · 关键词 · 主题聚类' },
+    redirect: (to) => ({
+      path: '/insights',
+      query: { ...to.query, tab: 'topics' },
+    }),
   },
   {
     path: '/alerts',

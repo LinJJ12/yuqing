@@ -90,7 +90,7 @@ defineExpose({ activeBvid, loadVideos, videos })
 </script>
 
 <template>
-  <div class="scope-bar">
+  <div class="scope-bar" :class="{ 'has-actions': $slots.actions }">
     <span class="scope-label">{{ label }}</span>
     <select
       class="input scope-select"
@@ -166,6 +166,10 @@ defineExpose({ activeBvid, loadVideos, videos })
         输入 BV
       </button>
     </template>
+
+    <div v-if="$slots.actions" class="scope-actions">
+      <slot name="actions" />
+    </div>
   </div>
 </template>
 
@@ -178,6 +182,13 @@ defineExpose({ activeBvid, loadVideos, videos })
   margin: 0 0 0.75rem;
   padding: 0.35rem 0;
   min-height: 2rem;
+}
+.scope-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-left: auto;
 }
 .scope-label {
   flex: none;

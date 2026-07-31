@@ -5,8 +5,7 @@ import {
   LayoutDashboard,
   Radar,
   Inbox,
-  HeartPulse,
-  Hash,
+  ScanSearch,
   BellRing,
   FileText,
   Bot,
@@ -54,8 +53,7 @@ const groups = [
   {
     label: '分析',
     items: [
-      { to: '/sentiment', label: '情感', icon: HeartPulse },
-      { to: '/topics', label: '话题', icon: Hash },
+      { to: '/insights', label: '洞察', icon: ScanSearch },
       { to: '/alerts', label: '预警', icon: BellRing },
     ],
   },

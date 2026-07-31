@@ -98,3 +98,9 @@ torch = { index = "pytorch-cu128" }
 
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+norecursedirs = ["vendor", ".venv", "node_modules", "frontend", ".git"]
+addopts = "-q"
