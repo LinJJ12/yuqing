@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.lib.http import err, ok
 from src.services.forecast import build_report_summary
 from src.services.report import build_csv_bytes, build_pdf_bytes, generate_ai_summary
-from src.services.video_report import build_video_report, list_video_summaries
+from src.services.video_report import (
+    build_up_report,
+    build_video_report,
+    compare_videos,
+    list_up_summaries,
+    list_video_summaries,
+)
 
 router = APIRouter(tags=["reports"])
 
@@ -21,6 +27,12 @@ class ReportSummaryIn(BaseModel):
 class VideoReportIn(BaseModel):
     bvid: str
     with_ai: bool = False
+
+
+class VideoCompareIn(BaseModel):
+    bvids: list[str] = Field(min_length=2, max_length=8)
+    with_keywords: bool = True
+    keyword_top_k: int = Field(default=8, ge=3, le=20)
 
 
 @router.get("/reports/summary")
@@ -63,6 +75,37 @@ def report_video_post(body: VideoReportIn):
         data = build_video_report(body.bvid, with_ai=body.with_ai)
     except ValueError as exc:
         return err("invalid_bvid", str(exc), status=400)
+    return ok(data)
+
+
+@router.post("/reports/compare")
+def report_compare(body: VideoCompareIn):
+    try:
+        data = compare_videos(
+            body.bvids,
+            with_keywords=body.with_keywords,
+            keyword_top_k=body.keyword_top_k,
+        )
+    except ValueError as exc:
+        return err("invalid_compare", str(exc), status=400)
+    return ok(data)
+
+
+@router.get("/reports/ups")
+def report_ups(limit: int = Query(default=50, ge=1, le=200)):
+    items = list_up_summaries(limit=limit)
+    return ok({"items": items, "count": len(items)})
+
+
+@router.get("/reports/up")
+def report_up(
+    mid: str = Query(..., min_length=1, max_length=40),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    try:
+        data = build_up_report(mid, limit=limit)
+    except ValueError as exc:
+        return err("invalid_mid", str(exc), status=400)
     return ok(data)
 
 

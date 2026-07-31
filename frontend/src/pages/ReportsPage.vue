@@ -5,7 +5,10 @@ import * as echarts from 'echarts'
 import { Download, ExternalLink, FileText, RefreshCw, Sparkles } from '@lucide/vue'
 import VideoScopePicker from '../components/VideoScopePicker.vue'
 import {
+  compareVideos,
   fetchReportSummary,
+  fetchUpReport,
+  fetchUpSummaries,
   fetchVideoReport,
   fetchVideoSummaries,
   generateReportSummary,
@@ -16,20 +19,28 @@ import {
 const route = useRoute()
 const router = useRouter()
 
-const mode = ref('video') // video | global
+const mode = ref('video') // video | compare | global
 const detailTab = ref('alerts') // alerts | samples | notes
 const loading = ref(true)
 const aiLoading = ref(false)
+const compareLoading = ref(false)
 const error = ref('')
 const report = ref(null)
 const videoReport = ref(null)
 const videos = ref([])
 const withAiExport = ref(false)
+const compareSelected = ref([])
+const compareResult = ref(null)
+const ups = ref([])
+const upDetail = ref(null)
+const upLoading = ref(false)
 
 const sentimentRef = ref(null)
 const topicRef = ref(null)
+const compareChartRef = ref(null)
 let sentimentChart
 let topicChart
+let compareChart
 
 const labelMap = {
   positive: '正面',
@@ -328,21 +339,210 @@ async function paintCharts() {
   } else if (mode.value === 'global' && report.value) {
     renderGlobalSentiment()
     renderGlobalTopics()
+  } else if (mode.value === 'compare' && compareResult.value) {
+    renderCompareChart()
   }
   requestAnimationFrame(() => {
     sentimentChart?.resize()
     topicChart?.resize()
+    compareChart?.resize()
   })
 }
 
 function onResize() {
   sentimentChart?.resize()
   topicChart?.resize()
+  compareChart?.resize()
+}
+
+function parseBvidsQuery(raw) {
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (!value) return []
+  return String(value)
+    .split(/[,，\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+}
+
+function syncCompareQuery() {
+  const query = { ...route.query }
+  delete query.bvid
+  if (compareSelected.value.length) query.bvids = compareSelected.value.join(',')
+  else delete query.bvids
+  router.replace({ query })
+}
+
+function isCompareSelected(bvid) {
+  return compareSelected.value.includes(bvid)
+}
+
+function toggleCompareBvid(bvid) {
+  const key = String(bvid || '').trim()
+  if (!key) return
+  const cur = [...compareSelected.value]
+  const idx = cur.indexOf(key)
+  if (idx >= 0) cur.splice(idx, 1)
+  else if (cur.length >= 8) {
+    error.value = '一次最多对比 8 个视频'
+    return
+  } else cur.push(key)
+  compareSelected.value = cur
+  error.value = ''
+  syncCompareQuery()
+}
+
+function sharePct(row, key) {
+  const labeled =
+    (row.positive || 0) + (row.neutral || 0) + (row.negative || 0) + (row.uncertain || 0)
+  if (!labeled) return 0
+  return Math.round(((row[key] || 0) / labeled) * 1000) / 10
+}
+
+function renderCompareChart() {
+  compareChart = ensureChart(compareChart, compareChartRef.value)
+  if (!compareChart || !compareResult.value) return
+  const items = (compareResult.value.items || []).filter((x) => !x.missing)
+  if (!items.length) {
+    compareChart.clear()
+    compareChart.setOption({
+      title: {
+        text: '暂无可对比数据',
+        left: 'center',
+        top: 'middle',
+        textStyle: { color: '#94a3b8', fontSize: 13, fontWeight: 400 },
+      },
+    })
+    return
+  }
+  const cats = items.map((x) => {
+    const t = (x.video_title || x.bvid || '').trim()
+    return t.length > 14 ? `${t.slice(0, 14)}…` : t
+  })
+  compareChart.setOption(
+    {
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { data: ['正面', '中性', '负面', '不确定'], bottom: 0 },
+      grid: { left: 48, right: 16, top: 28, bottom: 52 },
+      xAxis: {
+        type: 'category',
+        data: cats,
+        axisLabel: {
+          interval: 0,
+          rotate: cats.length > 4 ? 18 : 0,
+          color: '#64748b',
+          fontSize: 11,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        splitLine: { lineStyle: { color: '#f1f5f9' } },
+        axisLabel: { color: '#64748b' },
+      },
+      series: [
+        {
+          name: '正面',
+          type: 'bar',
+          stack: 's',
+          barMaxWidth: 36,
+          data: items.map((x) => x.positive || 0),
+          itemStyle: { color: '#16a34a' },
+        },
+        {
+          name: '中性',
+          type: 'bar',
+          stack: 's',
+          data: items.map((x) => x.neutral || 0),
+          itemStyle: { color: '#64748b' },
+        },
+        {
+          name: '负面',
+          type: 'bar',
+          stack: 's',
+          data: items.map((x) => x.negative || 0),
+          itemStyle: { color: '#dc2626' },
+        },
+        {
+          name: '不确定',
+          type: 'bar',
+          stack: 's',
+          data: items.map((x) => x.uncertain || 0),
+          itemStyle: { color: '#d97706' },
+        },
+      ],
+    },
+    true,
+  )
 }
 
 async function loadVideos() {
   const res = await fetchVideoSummaries(50)
   if (res.ok) videos.value = res.data.items || []
+}
+
+async function loadUps() {
+  const res = await fetchUpSummaries(40)
+  if (res.ok) ups.value = res.data.items || []
+}
+
+async function runCompare() {
+  if (compareSelected.value.length < 2) {
+    error.value = '请至少勾选 2 个不同视频'
+    compareResult.value = null
+    return
+  }
+  compareLoading.value = true
+  error.value = ''
+  try {
+    const res = await compareVideos({
+      bvids: compareSelected.value,
+      with_keywords: true,
+      keyword_top_k: 8,
+    })
+    if (!res.ok) throw new Error(res.error?.message || '对比失败')
+    compareResult.value = res.data
+  } catch (e) {
+    compareResult.value = null
+    error.value = e.message || '对比失败'
+  } finally {
+    compareLoading.value = false
+  }
+  await paintCharts()
+}
+
+async function onSelectUp(mid) {
+  const key = String(mid || '').trim()
+  if (!key) {
+    upDetail.value = null
+    return
+  }
+  upLoading.value = true
+  error.value = ''
+  try {
+    const res = await fetchUpReport(key)
+    if (!res.ok) throw new Error(res.error?.message || 'UP 聚合失败')
+    upDetail.value = res.data
+  } catch (e) {
+    upDetail.value = null
+    error.value = e.message || 'UP 聚合失败'
+  } finally {
+    upLoading.value = false
+  }
+}
+
+function useUpVideosInCompare() {
+  const list = (upDetail.value?.videos || [])
+    .map((v) => v.bvid)
+    .filter(Boolean)
+    .slice(0, 8)
+  if (list.length < 2) {
+    error.value = '该 UP 已入库视频不足 2 个，无法一键对比'
+    return
+  }
+  compareSelected.value = list
+  syncCompareQuery()
+  runCompare()
 }
 
 async function refreshGlobal() {
@@ -388,6 +588,20 @@ async function refresh() {
   await loadVideos()
   if (mode.value === 'global') {
     await refreshGlobal()
+    return
+  }
+  if (mode.value === 'compare') {
+    loading.value = true
+    try {
+      await loadUps()
+      if (compareSelected.value.length >= 2) await runCompare()
+      else {
+        compareResult.value = null
+        error.value = ''
+      }
+    } finally {
+      loading.value = false
+    }
     return
   }
   const bvid = activeBvid.value || videos.value[0]?.bvid || ''
@@ -463,7 +677,6 @@ watch(
   () => route.query.bvid,
   (v, prev) => {
     if (!v || String(v) === String(prev || '')) return
-    // 切模式交给 mode watch 拉数，避免与 loadVideo 重复请求
     if (mode.value !== 'video') {
       mode.value = 'video'
       return
@@ -472,41 +685,78 @@ watch(
   },
 )
 
+watch(
+  () => route.query.bvids,
+  (v) => {
+    if (mode.value !== 'compare') return
+    const next = parseBvidsQuery(v)
+    const same =
+      next.length === compareSelected.value.length &&
+      next.every((x, i) => x === compareSelected.value[i])
+    if (!same) compareSelected.value = next
+  },
+)
+
 watch(mode, (m) => {
   if (m === 'global') {
     sentimentChart?.dispose()
+    topicChart?.dispose()
+    compareChart?.dispose()
     sentimentChart = null
+    topicChart = null
+    compareChart = null
     refreshGlobal()
+  } else if (m === 'compare') {
+    sentimentChart?.dispose()
+    topicChart?.dispose()
+    sentimentChart = null
+    topicChart = null
+    const fromQ = parseBvidsQuery(route.query.bvids)
+    if (fromQ.length) compareSelected.value = fromQ
+    refresh()
   } else {
     topicChart?.dispose()
+    compareChart?.dispose()
     topicChart = null
+    compareChart = null
     refresh()
   }
 })
 
 onMounted(() => {
   window.addEventListener('resize', onResize)
-  refresh()
+  const fromQ = parseBvidsQuery(route.query.bvids)
+  if (fromQ.length >= 2) {
+    compareSelected.value = fromQ
+    mode.value = 'compare'
+  } else {
+    refresh()
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
   sentimentChart?.dispose()
   topicChart?.dispose()
+  compareChart?.dispose()
   sentimentChart = null
   topicChart = null
+  compareChart = null
 })
 </script>
 
 <template>
   <div class="page reports-page">
-    <!-- 工具区：视频选择与模式切换同一行 -->
+    <!-- 工具区 -->
     <template v-if="mode === 'video'">
       <VideoScopePicker :disabled="loading" :allow-empty="false">
         <template #actions>
           <div class="segmented">
             <button type="button" :class="{ active: mode === 'video' }" @click="mode = 'video'">
               单视频口碑
+            </button>
+            <button type="button" :class="{ active: mode === 'compare' }" @click="mode = 'compare'">
+              多视频对比
             </button>
             <button type="button" :class="{ active: mode === 'global' }" @click="mode = 'global'">
               全局导出
@@ -522,6 +772,38 @@ onBeforeUnmount(() => {
         暂无视频评论。请到「监测」粘贴视频链接采集后再回来查看口碑。
       </p>
     </template>
+
+    <div v-else-if="mode === 'compare'" class="compare-bar">
+      <div class="segmented">
+        <button type="button" :class="{ active: mode === 'video' }" @click="mode = 'video'">
+          单视频口碑
+        </button>
+        <button type="button" :class="{ active: mode === 'compare' }" @click="mode = 'compare'">
+          多视频对比
+        </button>
+        <button type="button" :class="{ active: mode === 'global' }" @click="mode = 'global'">
+          全局导出
+        </button>
+      </div>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        :disabled="compareLoading || compareSelected.length < 2"
+        @click="runCompare"
+      >
+        开始对比（{{ compareSelected.length }}/8）
+      </button>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        :disabled="loading || compareLoading"
+        @click="refresh"
+      >
+        <RefreshCw :size="14" />
+        刷新
+      </button>
+    </div>
+
     <div v-else class="export-bar">
       <label class="check">
         <input v-model="withAiExport" type="checkbox" />
@@ -549,6 +831,9 @@ onBeforeUnmount(() => {
           <button type="button" :class="{ active: mode === 'video' }" @click="mode = 'video'">
             单视频口碑
           </button>
+          <button type="button" :class="{ active: mode === 'compare' }" @click="mode = 'compare'">
+            多视频对比
+          </button>
           <button type="button" :class="{ active: mode === 'global' }" @click="mode = 'global'">
             全局导出
           </button>
@@ -560,11 +845,12 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <p v-if="loading" class="panel muted">正在汇总…</p>
-    <p v-else-if="error" class="panel err">{{ error }}</p>
+    <p v-if="error" class="panel err">{{ error }}</p>
+    <p v-if="loading && mode === 'video'" class="panel muted">正在汇总…</p>
+    <p v-else-if="loading && mode === 'global'" class="panel muted">正在汇总…</p>
 
     <!-- 单视频报告：聚焦口碑结论，不做库级总览复读 -->
-    <template v-else-if="mode === 'video' && videoReport">
+    <template v-if="mode === 'video' && videoReport && !loading">
       <section class="panel report-hero">
         <div class="hero-top">
           <div class="hero-text">
@@ -812,8 +1098,129 @@ onBeforeUnmount(() => {
       </section>
     </template>
 
+    <!-- 多视频对比 -->
+    <template v-if="mode === 'compare'">
+      <section class="panel compare-picker">
+        <div class="panel-head">
+          <h3>选择要对比的视频</h3>
+          <span class="muted">勾选 2～8 个已入库 BV，可深链 <code>?bvids=BV1,BV2</code></span>
+        </div>
+        <p v-if="!videos.length" class="hint">暂无视频。请先到监测页采集。</p>
+        <div v-else class="compare-pick-list">
+          <label v-for="v in videos" :key="v.bvid" class="compare-pick-item">
+            <input
+              type="checkbox"
+              :checked="isCompareSelected(v.bvid)"
+              :disabled="!isCompareSelected(v.bvid) && compareSelected.length >= 8"
+              @change="toggleCompareBvid(v.bvid)"
+            />
+            <span class="pick-title">{{ v.video_title || v.bvid }}</span>
+            <span class="pick-meta">
+              {{ v.bvid }} · {{ v.comment_count }} 评 · 正{{ v.positive }} / 负{{ v.negative }}
+            </span>
+          </label>
+        </div>
+
+        <div v-if="ups.length" class="up-block">
+          <div class="panel-head tight">
+            <h4>按 UP 聚合（需采集写入 mid）</h4>
+          </div>
+          <div class="up-row">
+            <select
+              class="input"
+              :disabled="upLoading"
+              @change="onSelectUp($event.target.value)"
+            >
+              <option value="">选择 UP…</option>
+              <option v-for="u in ups" :key="u.mid" :value="u.mid">
+                {{ u.owner_name || u.mid }}（{{ u.video_count }} 稿 / {{ u.comment_count }} 评）
+              </option>
+            </select>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="!upDetail || (upDetail.videos || []).length < 2"
+              @click="useUpVideosInCompare"
+            >
+              用该 UP 视频对比
+            </button>
+          </div>
+          <p v-if="upDetail" class="hint">
+            {{ upDetail.owner_name || upDetail.mid }}：已入库
+            {{ upDetail.video_count }} 个视频。
+          </p>
+        </div>
+      </section>
+
+      <p v-if="compareLoading" class="panel muted">正在对比…</p>
+
+      <template v-else-if="compareResult">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>情感对比</h3>
+            <span class="muted">
+              有效 {{ compareResult.present }} · 缺失 {{ compareResult.missing }}
+            </span>
+          </div>
+          <div ref="compareChartRef" class="chart compare-chart" />
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h3>明细</h3></div>
+          <div class="alert-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>视频</th>
+                  <th>评论</th>
+                  <th>正面</th>
+                  <th>中性</th>
+                  <th>负面</th>
+                  <th>不确定</th>
+                  <th>高频词</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in compareResult.items" :key="row.bvid">
+                  <td>
+                    <div class="cmp-title">{{ row.video_title || row.bvid }}</div>
+                    <div class="muted">
+                      {{ row.bvid }}
+                      <span v-if="row.missing" class="badge-miss">未入库</span>
+                      <a
+                        v-if="row.source_url && !row.missing"
+                        :href="row.source_url"
+                        target="_blank"
+                        rel="noopener"
+                        class="ext"
+                      >打开</a>
+                    </div>
+                  </td>
+                  <td>{{ row.comment_count }}</td>
+                  <td>{{ row.positive }}（{{ sharePct(row, 'positive') }}%）</td>
+                  <td>{{ row.neutral }}（{{ sharePct(row, 'neutral') }}%）</td>
+                  <td>{{ row.negative }}（{{ sharePct(row, 'negative') }}%）</td>
+                  <td>{{ row.uncertain }}</td>
+                  <td class="kw-cell">
+                    <template v-if="(row.keywords || []).length">
+                      <span
+                        v-for="w in row.keywords.slice(0, 6)"
+                        :key="w.name"
+                        class="kw-chip"
+                      >{{ w.name }}</span>
+                    </template>
+                    <span v-else class="muted">—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </template>
+    </template>
+
     <!-- 全局汇总 -->
-    <template v-else-if="mode === 'global' && report">
+    <template v-if="mode === 'global' && report && !loading">
       <section class="panel report-hero">
         <h3>{{ report.generated_for }}</h3>
         <div v-if="report.ai_summary" class="conclusion ai">
@@ -1298,6 +1705,95 @@ onBeforeUnmount(() => {
 }
 .hint {
   margin: 0.5rem 0 0;
+}
+
+.compare-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+.compare-picker .panel-head.tight {
+  margin-top: 1rem;
+}
+.compare-picker h4 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.compare-pick-list {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 280px;
+  overflow: auto;
+  margin-top: 0.55rem;
+}
+.compare-pick-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.55rem;
+  row-gap: 0.1rem;
+  align-items: start;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.compare-pick-item input {
+  grid-row: 1 / span 2;
+  margin-top: 0.2rem;
+}
+.pick-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.pick-meta {
+  grid-column: 2;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+}
+.up-block {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+.up-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.up-row .input {
+  min-width: 220px;
+  flex: 1;
+}
+.compare-chart {
+  min-height: 320px;
+}
+.cmp-title {
+  font-weight: 600;
+}
+.badge-miss {
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.kw-cell {
+  max-width: 220px;
+}
+.kw-chip {
+  display: inline-block;
+  margin: 0.1rem 0.2rem 0.1rem 0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 99px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
 }
 
 @media (max-width: 1000px) {

@@ -824,6 +824,100 @@ class Store:
             )
         return result
 
+    def list_bilibili_ups(self, *, limit: int = 50) -> list[dict]:
+        """按 raw.extra.mid 聚合已入库 UP（无 mid 的旧数据不会出现）。"""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                  json_extract(raw_json, '$.extra.mid') AS mid,
+                  MAX(json_extract(raw_json, '$.extra.owner_name')) AS owner_name,
+                  COUNT(DISTINCT json_extract(raw_json, '$.extra.bvid')) AS video_count,
+                  COUNT(*) AS comment_count,
+                  SUM(CASE WHEN sentiment_label = 'positive' THEN 1 ELSE 0 END) AS positive,
+                  SUM(CASE WHEN sentiment_label = 'neutral' THEN 1 ELSE 0 END) AS neutral,
+                  SUM(CASE WHEN sentiment_label = 'negative' THEN 1 ELSE 0 END) AS negative,
+                  MAX(COALESCE(fetched_at, published_at)) AS last_fetched_at
+                FROM posts
+                WHERE platform = 'bili'
+                  AND json_extract(raw_json, '$.extra.mid') IS NOT NULL
+                  AND trim(CAST(json_extract(raw_json, '$.extra.mid') AS TEXT)) != ''
+                GROUP BY json_extract(raw_json, '$.extra.mid')
+                ORDER BY MAX(COALESCE(fetched_at, published_at)) DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            mid = row["mid"]
+            try:
+                mid_out = int(mid) if mid is not None else None
+            except (TypeError, ValueError):
+                mid_out = mid
+            result.append(
+                {
+                    "mid": mid_out,
+                    "owner_name": row["owner_name"] or "",
+                    "video_count": int(row["video_count"] or 0),
+                    "comment_count": int(row["comment_count"] or 0),
+                    "positive": int(row["positive"] or 0),
+                    "neutral": int(row["neutral"] or 0),
+                    "negative": int(row["negative"] or 0),
+                    "last_fetched_at": row["last_fetched_at"],
+                }
+            )
+        return result
+
+    def list_bilibili_videos_by_mid(self, mid: str | int, *, limit: int = 50) -> list[dict]:
+        key = str(mid).strip() if mid is not None else ""
+        if not key:
+            return []
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                  json_extract(raw_json, '$.extra.bvid') AS bvid,
+                  MAX(json_extract(raw_json, '$.extra.video_title')) AS video_title,
+                  MAX(json_extract(raw_json, '$.extra.aid')) AS aid,
+                  MAX(json_extract(raw_json, '$.extra.mid')) AS mid,
+                  MAX(json_extract(raw_json, '$.extra.owner_name')) AS owner_name,
+                  COUNT(*) AS comment_count,
+                  SUM(CASE WHEN sentiment_label = 'positive' THEN 1 ELSE 0 END) AS positive,
+                  SUM(CASE WHEN sentiment_label = 'neutral' THEN 1 ELSE 0 END) AS neutral,
+                  SUM(CASE WHEN sentiment_label = 'negative' THEN 1 ELSE 0 END) AS negative,
+                  MAX(COALESCE(fetched_at, published_at)) AS last_fetched_at
+                FROM posts
+                WHERE platform = 'bili'
+                  AND CAST(json_extract(raw_json, '$.extra.mid') AS TEXT) = ?
+                  AND json_extract(raw_json, '$.extra.bvid') IS NOT NULL
+                  AND trim(json_extract(raw_json, '$.extra.bvid')) != ''
+                GROUP BY json_extract(raw_json, '$.extra.bvid')
+                ORDER BY MAX(COALESCE(fetched_at, published_at)) DESC
+                LIMIT ?
+                """,
+                (key, limit),
+            ).fetchall()
+        result = []
+        for row in rows:
+            bvid = row["bvid"]
+            result.append(
+                {
+                    "bvid": bvid,
+                    "video_title": row["video_title"] or "",
+                    "aid": row["aid"],
+                    "mid": row["mid"],
+                    "owner_name": row["owner_name"] or "",
+                    "comment_count": int(row["comment_count"] or 0),
+                    "positive": int(row["positive"] or 0),
+                    "neutral": int(row["neutral"] or 0),
+                    "negative": int(row["negative"] or 0),
+                    "last_fetched_at": row["last_fetched_at"],
+                    "source_url": f"https://www.bilibili.com/video/{bvid}" if bvid else None,
+                }
+            )
+        return result
+
     def list_posts_by_bvid(self, bvid: str, *, limit: int = 2000) -> list[dict]:
         key = (bvid or "").strip()
         if not key:

@@ -421,3 +421,123 @@ def apply_video_ai_conclusion(report: dict[str, Any]) -> dict[str, Any]:
             out["notes"] = [f"AI 口碑未生成：{msg}", *out["notes"]]
     return out
 
+
+def compare_videos(
+    bvids: list[str],
+    *,
+    with_keywords: bool = True,
+    keyword_top_k: int = 8,
+    text_cap: int = 500,
+) -> dict[str, Any]:
+    """并排对比多个 BV 的情感分布与可选高频词。缺失 BV 标记 missing，不整单失败。"""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in bvids or []:
+        key = normalize_bvid(raw) or (raw or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(key)
+    if len(cleaned) < 2:
+        raise ValueError("请至少选择 2 个不同的 BV")
+    if len(cleaned) > 8:
+        raise ValueError("一次最多对比 8 个视频")
+
+    top_k = max(3, min(int(keyword_top_k or 8), 20))
+    cap = max(50, min(int(text_cap or 500), 2000))
+    analyzer = get_topic_analyzer() if with_keywords else None
+    store = get_store()
+    items: list[dict[str, Any]] = []
+
+    for bvid in cleaned:
+        posts = store.list_posts_by_bvid(bvid, limit=2000)
+        if not posts:
+            items.append(
+                {
+                    "bvid": bvid,
+                    "missing": True,
+                    "video_title": "",
+                    "mid": None,
+                    "owner_name": "",
+                    "comment_count": 0,
+                    "positive": 0,
+                    "neutral": 0,
+                    "negative": 0,
+                    "uncertain": 0,
+                    "unknown": 0,
+                    "last_fetched_at": None,
+                    "keywords": [],
+                    "source_url": f"https://www.bilibili.com/video/{bvid}",
+                }
+            )
+            continue
+
+        extra = (posts[0].get("raw") or {}).get("extra") or {}
+        counts = Counter((p.get("sentiment_label") or "unknown") for p in posts)
+        keywords: list[dict[str, Any]] = []
+        if analyzer:
+            texts = [
+                (p.get("text") or "").strip()
+                for p in posts[:cap]
+                if (p.get("text") or "").strip()
+            ]
+            if texts:
+                keywords = analyzer.word_cloud(texts, top_k=top_k)
+        last = ""
+        for p in posts:
+            ts = p.get("fetched_at") or p.get("published_at") or ""
+            if ts > last:
+                last = ts
+        items.append(
+            {
+                "bvid": bvid,
+                "missing": False,
+                "video_title": extra.get("video_title") or "",
+                "mid": extra.get("mid"),
+                "owner_name": extra.get("owner_name") or "",
+                "comment_count": len(posts),
+                "positive": int(counts.get("positive") or 0),
+                "neutral": int(counts.get("neutral") or 0),
+                "negative": int(counts.get("negative") or 0),
+                "uncertain": int(counts.get("uncertain") or 0),
+                "unknown": int(counts.get("unknown") or 0),
+                "last_fetched_at": last or None,
+                "keywords": keywords,
+                "source_url": f"https://www.bilibili.com/video/{bvid}",
+            }
+        )
+
+    return {
+        "items": items,
+        "count": len(items),
+        "with_keywords": bool(with_keywords),
+        "present": sum(1 for x in items if not x.get("missing")),
+        "missing": sum(1 for x in items if x.get("missing")),
+    }
+
+
+def list_up_summaries(*, limit: int = 50) -> list[dict[str, Any]]:
+    return get_store().list_bilibili_ups(limit=limit)
+
+
+def build_up_report(mid: str | int, *, limit: int = 50) -> dict[str, Any]:
+    key = str(mid).strip() if mid is not None else ""
+    if not key:
+        raise ValueError("请提供 UP mid")
+    videos = get_store().list_bilibili_videos_by_mid(key, limit=limit)
+    owner = ""
+    for v in videos:
+        if v.get("owner_name"):
+            owner = v["owner_name"]
+            break
+    return {
+        "mid": int(key) if key.isdigit() else key,
+        "owner_name": owner,
+        "videos": videos,
+        "video_count": len(videos),
+        "comment_count": sum(int(v.get("comment_count") or 0) for v in videos),
+        "positive": sum(int(v.get("positive") or 0) for v in videos),
+        "neutral": sum(int(v.get("neutral") or 0) for v in videos),
+        "negative": sum(int(v.get("negative") or 0) for v in videos),
+    }
+

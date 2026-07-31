@@ -141,11 +141,18 @@ def resolve_video(client: httpx.Client, *, bvid: str | None = None, aid: int | N
     if data.get("code") != 0 or not data.get("data"):
         raise BilibiliCollectError(f"解析视频失败: {data.get('message') or data.get('code')}")
     info = data["data"]
+    owner = info.get("owner") or {}
+    mid = owner.get("mid")
+    try:
+        mid = int(mid) if mid is not None and str(mid).strip() != "" else None
+    except (TypeError, ValueError):
+        mid = None
     return {
         "aid": int(info["aid"]),
         "bvid": info.get("bvid") or bvid,
         "title": (info.get("title") or "").strip(),
-        "owner": ((info.get("owner") or {}).get("name") or "").strip(),
+        "owner": (owner.get("name") or "").strip(),
+        "mid": mid,
         "url": f"https://www.bilibili.com/video/{info.get('bvid') or bvid}",
     }
 
@@ -190,12 +197,18 @@ def search_videos(
                     if not aid and not bvid:
                         continue
                     title = re.sub(r"<[^>]+>", "", str(item.get("title") or ""))
+                    mid_raw = item.get("mid")
+                    try:
+                        mid = int(mid_raw) if mid_raw is not None and str(mid_raw).strip() else None
+                    except (TypeError, ValueError):
+                        mid = None
                     raw_videos.append(
                         {
                             "aid": int(aid) if aid else None,
                             "bvid": bvid,
                             "title": title.strip(),
                             "owner": str(item.get("author") or "").strip(),
+                            "mid": mid,
                             "url": f"https://www.bilibili.com/video/{bvid}" if bvid else None,
                         }
                     )
@@ -478,6 +491,8 @@ def _to_posts(
                 "bvid": bvid,
                 "aid": video.get("aid"),
                 "rpid": rpid,
+                "mid": video.get("mid"),
+                "owner_name": (video.get("owner") or "").strip() or None,
             },
         }
         try:
@@ -554,6 +569,15 @@ def collect_bilibili(
         for target in targets:
             aid = target.get("aid")
             try:
+                if target.get("bvid") and target.get("mid") is None:
+                    try:
+                        resolved = resolve_video(client, bvid=str(target["bvid"]))
+                        for key in ("aid", "title", "owner", "mid", "url", "bvid"):
+                            if resolved.get(key) not in (None, ""):
+                                target[key] = resolved[key]
+                        aid = target.get("aid")
+                    except BilibiliCollectError:
+                        pass
                 if not aid and target.get("bvid"):
                     target = resolve_video(client, bvid=target["bvid"])
                     aid = target["aid"]
@@ -601,6 +625,8 @@ def collect_bilibili(
                                     "video_title": target.get("title") or "",
                                     "bvid": target.get("bvid") or "",
                                     "aid": aid,
+                                    "mid": target.get("mid"),
+                                    "owner_name": (target.get("owner") or "").strip() or None,
                                     "kind": "video_title",
                                 },
                             },

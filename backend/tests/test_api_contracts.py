@@ -228,3 +228,71 @@ def test_agent_status(client):
     r = client.get("/api/v1/agent/status")
     assert r.status_code == 200
     assert "ready" in r.json()["data"]
+
+
+def test_compare_videos_and_ups(client, store):
+    def seed(bvid: str, mid: int, title: str, labels: list[str]):
+        for i, lab in enumerate(labels):
+            score = {"positive": 1, "neutral": 0, "negative": -1}[lab]
+            store.insert_posts(
+                "cmp",
+                [
+                    {
+                        "platform": "bili",
+                        "source_id": f"{bvid}-{i}",
+                        "author": "u",
+                        "text": f"{title} 评论{i} {lab}",
+                        "published_at": None,
+                        "fetched_at": "2026-07-31T12:00:00+00:00",
+                        "source_url": f"https://www.bilibili.com/video/{bvid}",
+                        "topic": "综合",
+                        "sentiment": score,
+                        "sentiment_label": lab,
+                        "sentiment_method": "bert",
+                        "sentiment_confidence": 0.9,
+                        "engagement": {},
+                        "raw": {
+                            "extra": {
+                                "bvid": bvid,
+                                "video_title": title,
+                                "mid": mid,
+                                "owner_name": "测试UP",
+                            }
+                        },
+                    }
+                ],
+            )
+
+    seed("BV1CmpAAA001", 10001, "视频甲", ["positive", "positive", "negative"])
+    seed("BV1CmpBBB002", 10001, "视频乙", ["negative", "neutral", "neutral"])
+
+    r = client.post(
+        "/api/v1/reports/compare",
+        json={
+            "bvids": ["BV1CmpAAA001", "BV1CmpBBB002", "BV1Missing999"],
+            "with_keywords": False,
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["count"] == 3
+    assert data["present"] == 2
+    assert data["missing"] == 1
+    by_bvid = {x["bvid"]: x for x in data["items"]}
+    assert by_bvid["BV1CmpAAA001"]["positive"] == 2
+    assert by_bvid["BV1CmpBBB002"]["negative"] == 1
+    assert by_bvid["BV1Missing999"]["missing"] is True
+
+    r = client.post("/api/v1/reports/compare", json={"bvids": ["BV1Only"]})
+    assert r.status_code in (400, 422)
+
+    r = client.get("/api/v1/reports/ups")
+    assert r.status_code == 200
+    ups = r.json()["data"]["items"]
+    assert any(str(u.get("mid")) == "10001" for u in ups)
+
+    r = client.get("/api/v1/reports/up", params={"mid": "10001"})
+    assert r.status_code == 200
+    up = r.json()["data"]
+    assert up["video_count"] == 2
+    assert up["owner_name"] == "测试UP"

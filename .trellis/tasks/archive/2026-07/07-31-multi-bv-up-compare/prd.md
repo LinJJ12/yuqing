@@ -19,11 +19,11 @@
 
 ## Acceptance Criteria
 
-- [ ] `GET` 或 `POST /api/v1/reports/compare`（或等价路径）对 2+ BV 返回可渲染的对比结构
-- [ ] 报告页（或新页）能完成「选片 → 看对比」主路径，无需手改 URL
-- [ ] 采集新评论时 `raw.extra` 含 `mid`（若接口可得）；旧数据无 mid 时 UP 列表可空但不报错
-- [ ] `uv run pytest` 含对比契约用例且通过
-- [ ] `frontend/src/api/client.js` 与 `docs/prd.md` 功能表已更新
+- [x] `GET` 或 `POST /api/v1/reports/compare`（或等价路径）对 2+ BV 返回可渲染的对比结构
+- [x] 报告页（或新页）能完成「选片 → 看对比」主路径，无需手改 URL
+- [x] 采集新评论时 `raw.extra` 含 `mid`（若接口可得）；旧数据无 mid 时 UP 列表可空但不报错
+- [x] `uv run pytest` 含对比契约用例且通过
+- [x] `frontend/src/api/client.js` 与 `docs/prd.md` 功能表已更新
 
 ## Out of scope
 

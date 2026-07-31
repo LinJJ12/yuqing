@@ -50,7 +50,7 @@
 | **洞察** | 情感跑批 / 分布 / 预览；词云 · TF-IDF · BERTopic；后台 analysis-jobs（合并原情感页+话题页） | BERT 三分类 + uncertain；jieba / TF-IDF + BERTopic |
 | **预警中心** | 负面/敏感词命中、热度突增；难例人工/LLM 改判；敏感词可配置 | 规则引擎 + 趋势日聚合 + review 列表 |
 | **趋势** | 滑动平均；可选 Prophet（预警页/报告共用） | `forecast` |
-| **分析报告** | 全局汇总；单视频口碑；CSV/PDF 导出；可选 AI 摘要 | `report` / `video_report` |
+| **分析报告** | 全局汇总；单视频口碑；**多 BV 对比**；CSV/PDF 导出；可选 AI 摘要；UP 聚合（需采集写入 mid） | `report` / `video_report` / `compare` |
 | **智能助手** | 多会话隔离问答与简报（可限定 BV）；切页不丢；请求代数防串写 | OpenAI 兼容或 Ollama Chat；`frontend/src/lib/agentSession.js` |
 | **系统设置** | 情感模型 / Ollama / 云端 LLM / B 站 Cookie 就绪检查；设备信息；敏感词 | readiness |
 

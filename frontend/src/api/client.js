@@ -224,6 +224,28 @@ export async function fetchVideoReport(bvid, { with_ai = false } = {}) {
   return data
 }
 
+/** 多 BV 口碑对比（2～8 个） */
+export async function compareVideos(payload) {
+  const { data } = await withFallback(api, 'post', '/reports/compare', {
+    data: payload,
+  })
+  return data
+}
+
+export async function fetchUpSummaries(limit = 50) {
+  const { data } = await withFallback(api, 'get', '/reports/ups', {
+    params: { limit },
+  })
+  return data
+}
+
+export async function fetchUpReport(mid, { limit = 50 } = {}) {
+  const { data } = await withFallback(api, 'get', '/reports/up', {
+    params: { mid, limit },
+  })
+  return data
+}
+
 export async function generateReportSummary({ with_ai = false } = {}) {
   const { data } = await withFallback(slowApi, 'post', '/reports/summary', {
     data: { with_ai },

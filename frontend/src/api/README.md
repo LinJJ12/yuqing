@@ -14,7 +14,7 @@
 |------|------|
 | `client.js` | Axios 实例与各资源方法 |
 
-主要方法：`collectBilibili`、`deletePosts`、`fetchVideoReport` / `fetchVideoSummaries`、`agentChat` / `agentBrief`（可传 `bvid`）、情感/主题/预警/报告导出等。
+主要方法：`collectBilibili`、`deletePosts`、`fetchVideoReport` / `fetchVideoSummaries`、`compareVideos`、`fetchUpSummaries` / `fetchUpReport`、`agentChat` / `agentBrief`（可传 `bvid`）、情感/主题/预警/报告导出等。
 
 ## 禁止
 

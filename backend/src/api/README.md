@@ -18,7 +18,7 @@
 | `collect.py` | `/collect/bilibili`（含标题门禁 / 评论去噪参数） |
 | `analysis.py` | `/analysis/*` `/analysis-jobs` |
 | `alerts.py` | `/alerts` `/trends` `/settings/alert-keywords` |
-| `reports.py` | `/reports/summary` `/reports/videos` `/reports/video`（GET/POST，`with_ai`） `/reports/export.*` |
+| `reports.py` | `/reports/summary` `/reports/videos` `/reports/video` `/reports/compare` `/reports/ups` `/reports/up`（GET/POST，`with_ai`） `/reports/export.*` |
 | `agent.py` | `/agent/status` `/agent/chat` `/agent/brief`（可选 `bvid`） |
 
 ## 下一层怎么选
