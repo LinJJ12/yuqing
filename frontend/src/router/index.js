@@ -11,13 +11,19 @@ const routes = [
     path: '/monitor',
     name: 'monitor',
     component: () => import('../pages/MonitorPage.vue'),
-    meta: { title: '舆情监测', subtitle: 'B 站评论采集 · 文件导入 · 浏览入库' },
+    meta: { title: '舆情监测', subtitle: 'B 站评论采集 · 文件导入' },
+  },
+  {
+    path: '/inbox',
+    name: 'inbox',
+    component: () => import('../pages/InboxPage.vue'),
+    meta: { title: '入库浏览', subtitle: '按平台筛选 · 翻页查看' },
   },
   {
     path: '/sentiment',
     name: 'sentiment',
     component: () => import('../pages/SentimentPage.vue'),
-    meta: { title: '情感分析', subtitle: '正面 / 中性 / 负面' },
+    meta: { title: '情感分析', subtitle: '跑批 · 分布 · 单句预览' },
   },
   {
     path: '/topics',
@@ -29,7 +35,7 @@ const routes = [
     path: '/alerts',
     name: 'alerts',
     component: () => import('../pages/AlertsPage.vue'),
-    meta: { title: '预警中心', subtitle: '负面/敏感词 · 热度突增' },
+    meta: { title: '预警中心', subtitle: '预警列表 · 难例改判 · 热度趋势' },
   },
   {
     path: '/reports',

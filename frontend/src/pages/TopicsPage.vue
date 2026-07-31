@@ -1,22 +1,31 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import * as echarts from 'echarts'
 import 'echarts-wordcloud'
 import { Cloud, ListTree, RefreshCw } from '@lucide/vue'
 import PageHeader from '../components/PageHeader.vue'
+import VideoScopePicker from '../components/VideoScopePicker.vue'
 import { fetchOverview, fetchWordCloud, runTopics } from '../api/client'
+
+const route = useRoute()
+const activeBvid = computed(() => String(route.query.bvid || '').trim())
+const scopeOpts = () => (activeBvid.value ? { bvid: activeBvid.value } : {})
 
 const advTab = ref('tfidf')
 
-const loading = ref(false)
+/** null | 'freq' | 'bertopic' — which run button is busy */
+const runMode = ref(null)
 const message = ref('')
 const error = ref('')
 const result = ref(null)
 const cloudRef = ref(null)
 const rankRef = ref(null)
+const advPanelRef = ref(null)
 let cloudChart
 let rankChart
 
+const loading = computed(() => runMode.value != null)
 const words = computed(() => result.value?.word_cloud || [])
 const keywords = computed(() => result.value?.keywords || [])
 const bertopic = computed(() => result.value?.bertopic || [])
@@ -162,40 +171,65 @@ async function paint(list) {
 }
 
 async function loadWords() {
-  const [w, o] = await Promise.all([fetchWordCloud(60), fetchOverview()])
+  const scope = scopeOpts()
+  const [w, o] = await Promise.all([
+    fetchWordCloud(60, scope),
+    activeBvid.value ? Promise.resolve({ ok: false }) : fetchOverview(),
+  ])
   if (w.ok) {
     result.value = {
       ...(result.value || {}),
       word_cloud: w.data.word_cloud,
       document_count: w.data.document_count,
-      db_topics: o.ok ? o.data.by_topic || [] : result.value?.db_topics || [],
+      db_topics: o.ok
+        ? o.data.by_topic || []
+        : activeBvid.value
+          ? []
+          : result.value?.db_topics || [],
+      bvid: activeBvid.value || null,
     }
     await paint(w.data.word_cloud)
   }
 }
 
 async function onRun(useBertopic = true) {
-  loading.value = true
+  runMode.value = useBertopic ? 'bertopic' : 'freq'
   error.value = ''
   message.value = useBertopic
     ? '正在提取词频并做主题聚类…'
     : '正在提取词频 / 关键词…'
   try {
-    const res = await runTopics({ limit: 2000, use_bertopic: useBertopic })
+    const res = await runTopics({
+      limit: 2000,
+      use_bertopic: useBertopic,
+      ...scopeOpts(),
+    })
     if (!res.ok) {
       error.value = res.error?.message || '主题分析失败'
       return
     }
     result.value = res.data
-    message.value = `完成：文档 ${res.data.document_count} 条，耗时 ${res.data.elapsed_ms} ms`
-    if (res.data.bertopic_error) {
-      message.value += '（主题聚类已回退到词频）'
+    const kwCount = (res.data.keywords || []).length
+    const topicCount = (res.data.bertopic || []).length
+    if (useBertopic) {
+      advTab.value = topicCount ? 'bertopic' : 'tfidf'
+      message.value = topicCount
+        ? `完成：文档 ${res.data.document_count} 条，主题 ${topicCount} 个，关键词 ${kwCount} 个（${res.data.elapsed_ms} ms）`
+        : `完成：文档 ${res.data.document_count} 条，关键词 ${kwCount} 个（${res.data.elapsed_ms} ms）`
+      if (res.data.bertopic_error) {
+        message.value += '（主题聚类已回退到词频）'
+      }
+    } else {
+      advTab.value = 'tfidf'
+      message.value = `词频完成：文档 ${res.data.document_count} 条，词条 ${(res.data.word_cloud || []).length}，关键词 ${kwCount} 个（${res.data.elapsed_ms} ms）· 见下方「关键词权重」`
     }
     await paint(res.data.word_cloud)
+    await nextTick()
+    advPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   } catch (e) {
     error.value = e?.response?.data?.error?.message || e.message || '请求失败'
   } finally {
-    loading.value = false
+    runMode.value = null
   }
 }
 
@@ -211,6 +245,18 @@ onMounted(async () => {
     error.value = '无法连接后端'
   }
   window.addEventListener('resize', onResize)
+})
+
+watch(activeBvid, async () => {
+  message.value = activeBvid.value
+    ? `已切换到视频 ${activeBvid.value}`
+    : '已切换到全部视频'
+  error.value = ''
+  try {
+    await loadWords()
+  } catch {
+    error.value = '无法连接后端'
+  }
 })
 
 onBeforeUnmount(() => {
@@ -233,11 +279,11 @@ onBeforeUnmount(() => {
         </span>
         <button type="button" class="btn btn-primary" :disabled="loading" @click="onRun(true)">
           <Cloud :size="16" />
-          {{ loading ? '分析中…' : '词频 + 主题聚类' }}
+          {{ runMode === 'bertopic' ? '聚类中…' : '词频 + 主题聚类' }}
         </button>
         <button type="button" class="btn btn-secondary" :disabled="loading" @click="onRun(false)">
           <ListTree :size="16" />
-          仅词频
+          {{ runMode === 'freq' ? '提取中…' : '仅词频' }}
         </button>
         <button type="button" class="btn btn-ghost" :disabled="loading" @click="loadWords">
           <RefreshCw :size="16" />
@@ -248,6 +294,8 @@ onBeforeUnmount(() => {
 
     <p v-if="message" class="ok-text status-line">{{ message }}</p>
     <p v-if="error" class="err status-line">{{ error }}</p>
+
+    <VideoScopePicker :disabled="loading" />
 
     <div class="main-grid">
       <section class="panel cloud-panel">
@@ -273,7 +321,7 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
-    <section class="panel adv-panel">
+    <section ref="advPanelRef" class="panel adv-panel">
       <div class="ui-tabs">
         <div class="ui-tabs-nav" role="tablist">
           <button
@@ -283,6 +331,7 @@ onBeforeUnmount(() => {
             @click="advTab = 'tfidf'"
           >
             关键词权重
+            <em v-if="keywords.length" class="tab-count">{{ keywords.length }}</em>
           </button>
           <button
             type="button"
@@ -299,6 +348,7 @@ onBeforeUnmount(() => {
             @click="advTab = 'bertopic'"
           >
             主题聚类
+            <em v-if="bertopic.length" class="tab-count">{{ bertopic.length }}</em>
           </button>
         </div>
 
@@ -405,6 +455,15 @@ onBeforeUnmount(() => {
 }
 .adv-panel {
   padding-top: 0.65rem;
+  scroll-margin-top: 1rem;
+}
+.tab-count {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-left: 0.15rem;
 }
 .rank-list {
   list-style: none;

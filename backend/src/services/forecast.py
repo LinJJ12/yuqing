@@ -188,8 +188,9 @@ def daily_volume_series(
     *,
     use_prophet: bool = True,
     prophet_horizon: int = 7,
+    bvid: str | None = None,
 ) -> dict[str, Any]:
-    posts = get_store().list_posts(limit=5000)
+    posts = get_store().list_posts(limit=5000, bvid=bvid)
     buckets: dict[str, int] = defaultdict(int)
     for post in posts:
         # 与总览 by_day / 列表默认排序一致：优先入库时间，避免样例假发布时间主导趋势
@@ -213,11 +214,12 @@ def daily_volume_series(
     prophet_meta = {"enabled": False, "message": "未启用", "horizon_days": prophet_horizon}
     if use_prophet:
         series, prophet_meta = _prophet_forecast(series, horizon_days=prophet_horizon)
-    return {"series": series, "prophet": prophet_meta}
+    return {"series": series, "prophet": prophet_meta, "bvid": bvid}
 
 
-def detect_alerts() -> list[dict[str, Any]]:
-    posts = get_store().list_posts(limit=2000)
+def detect_alerts(*, bvid: str | None = None) -> list[dict[str, Any]]:
+    key = (bvid or "").strip() or None
+    posts = get_store().list_posts(limit=2000, bvid=key)
     alerts: list[dict[str, Any]] = []
     keywords = get_alert_keywords()
 
@@ -226,17 +228,18 @@ def detect_alerts() -> list[dict[str, Any]]:
         if item:
             alerts.append(item)
 
-    trend = daily_volume_series(14, use_prophet=False)
+    trend = daily_volume_series(14, use_prophet=False, bvid=key)
     series = [row for row in trend["series"] if not row.get("is_forecast")]
     if len(series) >= 2:
         last = series[-1]
         if last.get("growth_rate", 0) >= 0.5 and (last.get("count") or 0) >= 5:
+            title = "发帖量异常上升" if not key else "该视频评论量异常上升"
             alerts.append(
                 {
-                    "id": f"surge-{last['day']}",
+                    "id": f"surge-{last['day']}" + (f"-{key}" if key else ""),
                     "type": "volume_surge",
                     "severity": "medium",
-                    "title": "发帖量异常上升",
+                    "title": title,
                     "message": (
                         f"{last['day']} 发帖 {last['count']} 条，"
                         f"较前日增长 {round(last['growth_rate'] * 100, 1)}%"
@@ -246,6 +249,7 @@ def detect_alerts() -> list[dict[str, Any]]:
                     "keywords": [],
                     "created_at": last["day"],
                     "post_id": None,
+                    "bvid": key,
                 }
             )
 

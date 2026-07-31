@@ -251,6 +251,51 @@ def main() -> None:
             json={"label": "neutral", "method": "manual", "confidence": 1},
         )
         check("sentiment override api", r.status_code == 200 and r.json()["ok"] is True, r.text[:160])
+
+        # 改判负面→正面后应从预警列表消失（预警页「改完切列表核对」）
+        store.insert_posts(
+            "alert-override",
+            [
+                {
+                    "platform": "bili",
+                    "source_id": "bili-cmt-alert-override",
+                    "author": "u",
+                    "text": "太差了垃圾翻车",
+                    "published_at": None,
+                    "fetched_at": "2026-07-31T00:00:00+00:00",
+                    "source_url": "https://www.bilibili.com/video/BV1AlertOv",
+                    "topic": "综合",
+                    "sentiment": -1,
+                    "sentiment_label": "negative",
+                    "sentiment_method": "bert",
+                    "sentiment_confidence": 0.91,
+                    "engagement": {},
+                    "raw": {"extra": {"bvid": "BV1AlertOv", "video_title": "预警改判"}},
+                }
+            ],
+        )
+        alert_pid = next(
+            p["id"]
+            for p in store.list_posts(limit=50)
+            if p.get("source_id") == "bili-cmt-alert-override"
+        )
+        before_alerts = client.get("/api/v1/alerts").json()["data"]["items"]
+        check(
+            "alert present before override",
+            any(a.get("post_id") == alert_pid for a in before_alerts),
+            str(before_alerts)[:160],
+        )
+        r = client.patch(
+            f"/api/v1/posts/{alert_pid}/sentiment",
+            json={"label": "positive", "method": "manual", "confidence": 1},
+        )
+        check("override neg to pos", r.status_code == 200 and r.json()["ok"] is True, r.text[:120])
+        after_alerts = client.get("/api/v1/alerts").json()["data"]["items"]
+        check(
+            "alert cleared after override",
+            not any(a.get("post_id") == alert_pid for a in after_alerts),
+            str(after_alerts)[:160],
+        )
         stats = store.sentiment_stats()
         check("stats has protected", int(stats.get("protected") or 0) >= 1, str(stats))
         check(

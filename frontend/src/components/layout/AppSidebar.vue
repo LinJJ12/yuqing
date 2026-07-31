@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import {
   LayoutDashboard,
   Radar,
+  Inbox,
   HeartPulse,
   Hash,
   BellRing,
@@ -45,7 +46,10 @@ const groups = [
   },
   {
     label: '采集',
-    items: [{ to: '/monitor', label: '监测', icon: Radar }],
+    items: [
+      { to: '/monitor', label: '监测', icon: Radar },
+      { to: '/inbox', label: '入库', icon: Inbox },
+    ],
   },
   {
     label: '分析',

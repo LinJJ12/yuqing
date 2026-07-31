@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from src.config.device import get_device_info
 from src.lib.http import err, ok
+from src.services.bilibili_collect import resolve_bvid
 from src.services.jobs import (
     enqueue_analysis_job,
     get_analysis_job,
@@ -32,6 +34,7 @@ class TextIn(BaseModel):
 class AnalyzeSentimentIn(BaseModel):
     limit: int = Field(default=2000, ge=1, le=5000)
     only_pending: bool = True
+    bvid: str | None = Field(default=None, max_length=200)
 
 
 class LlmReviewIn(BaseModel):
@@ -43,6 +46,7 @@ class LlmReviewIn(BaseModel):
 class AnalyzeTopicsIn(BaseModel):
     limit: int = Field(default=2000, ge=10, le=5000)
     use_bertopic: bool = True
+    bvid: str | None = Field(default=None, max_length=200)
 
 
 class AnalysisJobIn(BaseModel):
@@ -51,6 +55,12 @@ class AnalysisJobIn(BaseModel):
     only_pending: bool = True
     use_bertopic: bool = True
     topic_limit: int = Field(default=2000, ge=10, le=5000)
+    bvid: str | None = Field(default=None, max_length=200)
+
+
+def _scoped_db_topics(rows: list[dict]) -> list[dict]:
+    counts = Counter((r.get("topic") or "未分类") for r in rows)
+    return [{"topic": topic, "count": count} for topic, count in counts.most_common(12)]
 
 
 @router.get("/analysis/status")
@@ -109,20 +119,22 @@ def sentiment_llm_review(body: LlmReviewIn):
 @router.post("/analysis/sentiment/run")
 def sentiment_run(body: AnalyzeSentimentIn):
     store = get_store()
+    bvid = resolve_bvid(body.bvid)
     force_all = should_rerun_all_sentiment(body.only_pending, store)
     posts = store.list_posts(
         limit=body.limit,
         offset=0,
         only_pending_bert=not force_all,
         exclude_protected=True,
+        bvid=bvid,
     )
     if not posts:
         # 换模全量时若仅剩人工/LLM 保护帖或库空，仍标记模型已对齐，避免永久 stale
-        if force_all:
+        if force_all and not bvid:
             mark_sentiment_model_applied(store)
-        stats = store.sentiment_stats()
+        stats = store.sentiment_stats(bvid=bvid)
         if stats.get("total", 0) == 0:
-            msg = "库中无帖子"
+            msg = "当前范围内无帖子" if bvid else "库中无帖子"
         elif force_all:
             msg = "没有可覆盖的帖子（人工/LLM 改判已保护）"
         elif body.only_pending:
@@ -134,6 +146,7 @@ def sentiment_run(body: AnalyzeSentimentIn):
                 "updated": 0,
                 "message": msg,
                 "full_rerun": force_all,
+                "bvid": bvid,
                 "stats": stats,
             }
         )
@@ -154,7 +167,9 @@ def sentiment_run(body: AnalyzeSentimentIn):
             for post, pred in zip(posts, preds)
         ]
         updated = store.update_post_sentiments(updates)
-        mark_sentiment_model_applied(store)
+        # 单视频跑批不清除全局 model_stale，避免误标整库已对齐
+        if not bvid:
+            mark_sentiment_model_applied(store)
         elapsed = round((time.perf_counter() - t0) * 1000, 1)
         return ok(
             {
@@ -162,7 +177,8 @@ def sentiment_run(body: AnalyzeSentimentIn):
                 "device": analyzer.status.get("device"),
                 "elapsed_ms": elapsed,
                 "full_rerun": force_all,
-                "stats": store.sentiment_stats(),
+                "bvid": bvid,
+                "stats": store.sentiment_stats(bvid=bvid),
                 "sample": [
                     {
                         "id": posts[i]["id"],
@@ -178,32 +194,46 @@ def sentiment_run(body: AnalyzeSentimentIn):
 
 
 @router.get("/analysis/sentiment/stats")
-def sentiment_stats():
-    return ok(get_store().sentiment_stats())
+def sentiment_stats(bvid: str | None = Query(default=None, max_length=200)):
+    return ok(get_store().sentiment_stats(bvid=resolve_bvid(bvid)))
 
 
 @router.post("/analysis/topics/run")
 def topics_run(body: AnalyzeTopicsIn):
     store = get_store()
-    rows = store.list_post_texts(limit=body.limit)
+    bvid = resolve_bvid(body.bvid)
+    rows = store.list_post_texts(limit=body.limit, bvid=bvid)
     texts = [r["text"] for r in rows]
     if len(texts) < 5:
-        return err("not_enough_data", "帖子数量不足，请先导入数据", status=400)
+        scope = "该视频" if bvid else "库中"
+        return err(
+            "not_enough_data",
+            f"{scope}帖子数量不足（需至少 5 条），请先导入或采集更多评论",
+            status=400,
+        )
     try:
         t0 = time.perf_counter()
         result = get_topic_analyzer().analyze(texts, use_bertopic=body.use_bertopic)
         result["elapsed_ms"] = round((time.perf_counter() - t0) * 1000, 1)
-        result["db_topics"] = store.overview()["by_topic"]
+        result["bvid"] = bvid
+        if bvid:
+            result["db_topics"] = _scoped_db_topics(rows)
+        else:
+            result["db_topics"] = store.overview()["by_topic"]
         return ok(result)
     except Exception as exc:
         return err("topics_failed", f"主题分析失败: {exc}", status=500)
 
 
 @router.get("/analysis/topics/words")
-def topic_words(top_k: int = Query(default=40, ge=5, le=100)):
-    rows = get_store().list_post_texts(limit=3000)
+def topic_words(
+    top_k: int = Query(default=40, ge=5, le=100),
+    bvid: str | None = Query(default=None, max_length=200),
+):
+    key = resolve_bvid(bvid)
+    rows = get_store().list_post_texts(limit=3000, bvid=key)
     words = get_topic_analyzer().word_cloud([r["text"] for r in rows], top_k=top_k)
-    return ok({"word_cloud": words, "document_count": len(rows)})
+    return ok({"word_cloud": words, "document_count": len(rows), "bvid": key})
 
 
 @router.post("/analysis-jobs")
@@ -216,6 +246,7 @@ def create_analysis_job(body: AnalysisJobIn):
                 "only_pending": body.only_pending,
                 "use_bertopic": body.use_bertopic,
                 "topic_limit": body.topic_limit,
+                "bvid": resolve_bvid(body.bvid),
             },
         )
         return ok(job)

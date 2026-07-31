@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from src.config.settings import settings
 from src.lib.http import err, ok
-from src.services.bilibili_collect import normalize_bvid
+from src.services.bilibili_collect import normalize_bvid, resolve_bvid
 from src.services.ingest import import_file
 from src.storage.db import get_store
 
@@ -103,8 +103,10 @@ def list_posts(
     offset: int = Query(default=0, ge=0),
     order: str = Query(default="fetched", pattern="^(fetched|published)$"),
     label: str | None = Query(default=None),
+    bvid: str | None = Query(default=None, max_length=200),
 ):
     store = get_store()
+    key = resolve_bvid(bvid)
     posts = store.list_posts(
         topic=topic,
         platform=platform,
@@ -112,8 +114,9 @@ def list_posts(
         offset=offset,
         order=order,
         label=label,
+        bvid=key,
     )
-    total = store.count_posts(topic=topic, platform=platform, label=label)
+    total = store.count_posts(topic=topic, platform=platform, label=label, bvid=key)
     return ok(
         {
             "items": posts,
@@ -122,15 +125,20 @@ def list_posts(
             "platform": platform or "all",
             "order": order,
             "label": label,
+            "bvid": key,
         }
     )
 
 
 @router.get("/posts/review")
-def list_review_posts(limit: int = Query(default=40, ge=1, le=200)):
+def list_review_posts(
+    limit: int = Query(default=40, ge=1, le=200),
+    bvid: str | None = Query(default=None, max_length=200),
+):
     """难例列表：uncertain / 低置信优先，供人工改判。"""
-    items = get_store().list_review_posts(limit=limit)
-    return ok({"items": items, "count": len(items)})
+    key = resolve_bvid(bvid)
+    items = get_store().list_review_posts(limit=limit, bvid=key)
+    return ok({"items": items, "count": len(items), "bvid": key})
 
 
 @router.patch("/posts/{post_id}/sentiment")

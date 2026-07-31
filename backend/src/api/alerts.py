@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from src.lib.http import ok
+from src.services.bilibili_collect import resolve_bvid
 from src.services.forecast import (
     daily_volume_series,
     detect_alerts,
@@ -21,8 +22,12 @@ class AlertKeywordsIn(BaseModel):
 
 
 @router.get("/alerts")
-def list_alerts(limit: int = Query(default=50, ge=1, le=200)):
-    items = detect_alerts()[:limit]
+def list_alerts(
+    limit: int = Query(default=50, ge=1, le=200),
+    bvid: str | None = Query(default=None, max_length=200),
+):
+    key = resolve_bvid(bvid)
+    items = detect_alerts(bvid=key)[:limit]
     return ok(
         {
             "items": items,
@@ -31,6 +36,7 @@ def list_alerts(limit: int = Query(default=50, ge=1, le=200)):
             "medium": sum(1 for a in items if a["severity"] == "medium"),
             "low": sum(1 for a in items if a["severity"] == "low"),
             "keywords": get_alert_keywords(),
+            "bvid": key,
         }
     )
 
@@ -40,12 +46,14 @@ def trends(
     days: int = Query(default=14, ge=3, le=60),
     use_prophet: bool = Query(default=True),
     prophet_horizon: int = Query(default=7, ge=1, le=30),
+    bvid: str | None = Query(default=None, max_length=200),
 ):
     return ok(
         daily_volume_series(
             days,
             use_prophet=use_prophet,
             prophet_horizon=prophet_horizon,
+            bvid=resolve_bvid(bvid),
         )
     )
 

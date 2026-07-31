@@ -11,6 +11,7 @@ import {
   ExternalLink,
 } from '@lucide/vue'
 import { fetchOverview, fetchTrends } from '../api/client'
+import { formatDateTime } from '../lib/datetime'
 
 const loading = ref(true)
 const error = ref('')
@@ -424,6 +425,7 @@ onBeforeUnmount(() => {
             <b>监测：贴 BV 采集评论</b>
             <p>打开监测页，粘贴 B 站视频链接或 BV 号，开始采集并入库。</p>
             <RouterLink class="btn btn-primary btn-sm" to="/monitor">去监测</RouterLink>
+            <RouterLink class="btn btn-secondary btn-sm" to="/inbox" style="margin-left: 0.45rem">看入库</RouterLink>
           </li>
           <li>
             <b>情感：确认分析完成</b>
@@ -548,7 +550,7 @@ onBeforeUnmount(() => {
               <p v-if="videoTitle(post)" class="feed-sub">{{ videoTitle(post) }}</p>
               <p class="feed-text">{{ post.text }}</p>
               <footer>
-                <time>{{ post.fetched_at || post.published_at }}</time>
+                <time>{{ formatDateTime(post.fetched_at || post.published_at) }}</time>
                 <a
                   v-if="post.source_url"
                   :href="post.source_url"

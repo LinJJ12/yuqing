@@ -120,6 +120,14 @@ def normalize_bvid(value: str | None) -> str | None:
     return str(bvid) if bvid else None
 
 
+def resolve_bvid(value: str | None) -> str | None:
+    """查询参数用：规范化 BV；解析失败则保留去空白原文；空则 None。"""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    return normalize_bvid(raw) or raw
+
+
 def resolve_video(client: httpx.Client, *, bvid: str | None = None, aid: int | None = None) -> dict[str, Any]:
     params: dict[str, Any] = {}
     if bvid:

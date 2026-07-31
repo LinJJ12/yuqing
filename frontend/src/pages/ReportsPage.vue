@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { Download, ExternalLink, FileText, RefreshCw, Sparkles } from '@lucide/vue'
 import PageHeader from '../components/PageHeader.vue'
+import VideoScopePicker from '../components/VideoScopePicker.vue'
 import {
   fetchReportSummary,
   fetchVideoReport,
@@ -24,7 +25,6 @@ const error = ref('')
 const report = ref(null)
 const videoReport = ref(null)
 const videos = ref([])
-const bvidInput = ref('')
 const withAiExport = ref(false)
 
 const sentimentRef = ref(null)
@@ -61,20 +61,6 @@ const sentimentColor = {
 }
 
 const activeBvid = computed(() => String(route.query.bvid || '').trim())
-const highlightBvid = computed(() => videoReport.value?.bvid || activeBvid.value)
-const videoQuery = ref('')
-const showManualInput = ref(false)
-
-const filteredVideos = computed(() => {
-  const q = videoQuery.value.trim().toLowerCase()
-  const list = videos.value || []
-  if (!q) return list
-  return list.filter((v) => {
-    const title = String(v.video_title || '').toLowerCase()
-    const id = String(v.bvid || '').toLowerCase()
-    return title.includes(q) || id.includes(q)
-  })
-})
 
 const videoSentiment = computed(() => videoReport.value?.sentiment?.by_label || {})
 const videoTotal = computed(() => videoReport.value?.overview?.total_posts ?? 0)
@@ -101,11 +87,6 @@ const sentimentPending = computed(
       videoReport.value?.sentiment?.sentiment_pending
     ),
 )
-
-function onPickVideo(e) {
-  const v = e.target.value
-  if (v) selectVideo(v)
-}
 
 function ensureChart(instance, el) {
   if (!el) return null
@@ -346,7 +327,6 @@ async function loadVideo(bvid) {
     const res = await fetchVideoReport(key)
     if (!res.ok) throw new Error(res.error?.message || '视频报告失败')
     videoReport.value = res.data
-    bvidInput.value = res.data.bvid || key
     detailTab.value = (res.data.alerts?.total || 0) > 0 ? 'alerts' : 'samples'
   } catch (e) {
     videoReport.value = null
@@ -363,7 +343,7 @@ async function refresh() {
     await refreshGlobal()
     return
   }
-  const bvid = activeBvid.value || bvidInput.value || videos.value[0]?.bvid || ''
+  const bvid = activeBvid.value || videos.value[0]?.bvid || ''
   if (bvid) {
     if (!activeBvid.value) {
       await router.replace({ query: { ...route.query, bvid } })
@@ -375,21 +355,6 @@ async function refresh() {
     loading.value = false
     error.value = ''
   }
-}
-
-function selectVideo(bvid) {
-  router.push({ query: { bvid } })
-  mode.value = 'video'
-}
-
-function submitBvid() {
-  const v = bvidInput.value.trim()
-  if (!v) {
-    error.value = '请填写视频号或视频链接'
-    return
-  }
-  router.push({ query: { bvid: v } })
-  mode.value = 'video'
 }
 
 async function onAiSummary() {
@@ -412,7 +377,7 @@ async function onAiSummary() {
 }
 
 async function onVideoAiConclusion() {
-  const key = (videoReport.value?.bvid || activeBvid.value || bvidInput.value || '').trim()
+  const key = (videoReport.value?.bvid || activeBvid.value || '').trim()
   if (!key) {
     error.value = '请先选择或填写视频号'
     return
@@ -423,7 +388,6 @@ async function onVideoAiConclusion() {
     const res = await fetchVideoReport(key, { with_ai: true })
     if (!res.ok) throw new Error(res.error?.message || '智能口碑失败')
     videoReport.value = res.data
-    bvidInput.value = res.data.bvid || key
     if (res.data?.ai && !res.data.ai.summary) {
       error.value = res.data.ai.message || '智能口碑不可用'
     }
@@ -507,94 +471,35 @@ onBeforeUnmount(() => {
     </PageHeader>
 
     <!-- 工具区 -->
-    <section class="panel tool-panel">
-      <template v-if="mode === 'video'">
-        <div class="picker-row">
-          <label class="field picker-field">
-            选择已采集视频
-            <select
-              class="input"
-              :value="highlightBvid"
-              :disabled="!videos.length || loading"
-              @change="onPickVideo"
-            >
-              <option value="" disabled>
-                {{ videos.length ? `共 ${videos.length} 个视频` : '暂无视频' }}
-              </option>
-              <option
-                v-if="highlightBvid && !filteredVideos.some((v) => v.bvid === highlightBvid)"
-                :value="highlightBvid"
-              >
-                {{ highlightBvid }}（当前·不在筛选结果中）
-              </option>
-              <option v-for="v in filteredVideos" :key="v.bvid" :value="v.bvid">
-                {{ v.video_title || v.bvid }}（{{ v.comment_count }} 评
-                {{ v.negative ? ` · 负 ${v.negative}` : '' }}）
-              </option>
-            </select>
-          </label>
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            @click="showManualInput = !showManualInput"
-          >
-            {{ showManualInput ? '收起手动输入' : '手动输入视频号' }}
-          </button>
-        </div>
-
-        <div v-if="videos.length > 6" class="filter-row">
-          <input
-            v-model="videoQuery"
-            class="input"
-            placeholder="筛选标题或视频号（下拉列表会同步过滤）"
-          />
-          <span v-if="videoQuery.trim()" class="hint filter-hint">
-            匹配 {{ filteredVideos.length }} / {{ videos.length }}
-          </span>
-        </div>
-
-        <div v-if="showManualInput" class="bvid-row">
-          <input
-            v-model="bvidInput"
-            class="input"
-            placeholder="视频号或视频链接"
-            @keyup.enter="submitBvid"
-          />
-          <button type="button" class="btn btn-primary" :disabled="loading" @click="submitBvid">
-            生成口碑
-          </button>
-        </div>
-        <p v-else-if="!videos.length && !loading" class="hint">
-          暂无视频评论。请到「监测」粘贴视频链接采集后再回来查看口碑。
-        </p>
-      </template>
-
-      <template v-else>
-        <div class="export-row">
-          <label class="check">
-            <input v-model="withAiExport" type="checkbox" />
-            导出时附带智能摘要
-          </label>
-          <button
-            type="button"
-            class="btn btn-secondary btn-sm"
-            :disabled="aiLoading || loading"
-            @click="onAiSummary"
-          >
-            <Sparkles :size="14" />
-            智能摘要
-          </button>
-          <button type="button" class="btn btn-secondary btn-sm" @click="openExport('csv')">
-            <Download :size="14" />
-            导出表格
-          </button>
-          <button type="button" class="btn btn-primary btn-sm" @click="openExport('pdf')">
-            <FileText :size="14" />
-            导出文档
-          </button>
-        </div>
-      </template>
-    </section>
+    <template v-if="mode === 'video'">
+      <VideoScopePicker :disabled="loading" :allow-empty="false" />
+      <p v-if="!videos.length && !loading" class="hint scope-empty">
+        暂无视频评论。请到「监测」粘贴视频链接采集后再回来查看口碑。
+      </p>
+    </template>
+    <div v-else class="export-bar">
+      <label class="check">
+        <input v-model="withAiExport" type="checkbox" />
+        导出时附带智能摘要
+      </label>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        :disabled="aiLoading || loading"
+        @click="onAiSummary"
+      >
+        <Sparkles :size="14" />
+        智能摘要
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" @click="openExport('csv')">
+        <Download :size="14" />
+        导出表格
+      </button>
+      <button type="button" class="btn btn-primary btn-sm" @click="openExport('pdf')">
+        <FileText :size="14" />
+        导出文档
+      </button>
+    </div>
 
     <p v-if="loading" class="panel muted">正在汇总…</p>
     <p v-else-if="error" class="panel err">{{ error }}</p>
@@ -878,51 +783,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.tool-panel {
-  padding-top: 0.9rem;
+.scope-empty {
+  margin: -0.35rem 0 0.75rem;
 }
-.picker-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-.picker-field {
-  flex: 1;
-  min-width: 16rem;
-  margin: 0;
-}
-.filter-row {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin-top: 0.65rem;
-  flex-wrap: wrap;
-}
-.filter-row .input {
-  max-width: 22rem;
-}
-.filter-hint {
-  margin: 0;
-}
-.bvid-row {
-  display: flex;
-  gap: 0.55rem;
-  max-width: 40rem;
-  margin-top: 0.65rem;
-}
-.bvid-row .input {
-  flex: 1;
-}
-.stat-line {
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.export-row {
+.export-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
   align-items: center;
+  margin: 0 0 0.75rem;
+  padding: 0.35rem 0;
+  min-height: 2rem;
 }
 .check {
   display: inline-flex;
@@ -931,6 +802,11 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: 0.85rem;
   margin-right: 0.25rem;
+}
+
+.stat-line {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .report-hero h3 {

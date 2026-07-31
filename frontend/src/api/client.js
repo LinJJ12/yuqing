@@ -66,16 +66,17 @@ export async function fetchPosts({
   offset = 0,
   order = 'fetched',
   label,
+  bvid,
 } = {}) {
   const { data } = await withFallback(api, 'get', '/posts', {
-    params: { topic, platform, limit, offset, order, label },
+    params: { topic, platform, limit, offset, order, label, bvid: bvid || undefined },
   })
   return data
 }
 
-export async function fetchReviewPosts(limit = 40) {
+export async function fetchReviewPosts(limit = 40, { bvid } = {}) {
   const { data } = await withFallback(api, 'get', '/posts/review', {
-    params: { limit },
+    params: { limit, bvid: bvid || undefined },
   })
   return data
 }
@@ -123,40 +124,47 @@ export async function previewSentiment(text) {
   return data
 }
 
-export async function runSentiment({ limit = 2000, only_pending = true } = {}) {
+export async function runSentiment({ limit = 2000, only_pending = true, bvid } = {}) {
   const { data } = await withFallback(slowApi, 'post', '/analysis/sentiment/run', {
-    data: { limit, only_pending },
+    data: { limit, only_pending, bvid: bvid || null },
   })
   return data
 }
 
-export async function fetchSentimentStats() {
-  const { data } = await withFallback(api, 'get', '/analysis/sentiment/stats')
+export async function fetchSentimentStats({ bvid } = {}) {
+  const { data } = await withFallback(api, 'get', '/analysis/sentiment/stats', {
+    params: { bvid: bvid || undefined },
+  })
   return data
 }
 
-export async function runTopics({ limit = 2000, use_bertopic = true } = {}) {
+export async function runTopics({ limit = 2000, use_bertopic = true, bvid } = {}) {
   const { data } = await withFallback(slowApi, 'post', '/analysis/topics/run', {
-    data: { limit, use_bertopic },
+    data: { limit, use_bertopic, bvid: bvid || null },
   })
   return data
 }
 
-export async function fetchWordCloud(top_k = 40) {
+export async function fetchWordCloud(top_k = 40, { bvid } = {}) {
   const { data } = await withFallback(api, 'get', '/analysis/topics/words', {
-    params: { top_k },
+    params: { top_k, bvid: bvid || undefined },
   })
   return data
 }
 
-export async function fetchAlerts(limit = 50) {
-  const { data } = await withFallback(api, 'get', '/alerts', { params: { limit } })
+export async function fetchAlerts(limit = 50, { bvid } = {}) {
+  const { data } = await withFallback(api, 'get', '/alerts', {
+    params: { limit, bvid: bvid || undefined },
+  })
   return data
 }
 
-export async function fetchTrends(days = 14, { use_prophet = true, prophet_horizon = 7 } = {}) {
+export async function fetchTrends(
+  days = 14,
+  { use_prophet = true, prophet_horizon = 7, bvid } = {},
+) {
   const { data } = await withFallback(api, 'get', '/trends', {
-    params: { days, use_prophet, prophet_horizon },
+    params: { days, use_prophet, prophet_horizon, bvid: bvid || undefined },
   })
   return data
 }

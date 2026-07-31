@@ -206,6 +206,19 @@ a {
   padding: 0.3rem 0.7rem;
   font-size: 0.8125rem;
 }
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+  flex-wrap: wrap;
+}
+.pager-info {
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
 .btn-icon {
   width: 32px;
   height: 32px;
@@ -572,6 +585,25 @@ a {
   width: 100%;
   height: 280px;
   min-height: 280px;
+}
+.chart-box.chart-compact {
+  height: 200px;
+  min-height: 200px;
+}
+
+.kpi-grid.kpi-compact {
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+.kpi-grid.kpi-compact .kpi {
+  padding: 0.55rem 0.7rem;
+}
+.kpi-grid.kpi-compact .kpi-value {
+  font-size: 1.15rem;
+  margin-top: 0.15rem;
+}
+.kpi-grid.kpi-compact .kpi-label {
+  font-size: 0.72rem;
 }
 
 .status-banner {

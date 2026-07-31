@@ -205,12 +205,23 @@ class Store:
                 inserted += max(cursor.rowcount, 0)
         return inserted
 
+    @staticmethod
+    def _append_bvid_clause(
+        clauses: list[str], values: list[Any], bvid: str | None
+    ) -> None:
+        key = (bvid or "").strip()
+        if not key:
+            return
+        clauses.append("json_extract(raw_json, '$.extra.bvid') = ?")
+        values.append(key)
+
     def count_posts(
         self,
         *,
         topic: str | None = None,
         platform: str | None = None,
         label: str | None = None,
+        bvid: str | None = None,
     ) -> int:
         clauses: list[str] = []
         values: list[Any] = []
@@ -223,6 +234,7 @@ class Store:
         if label:
             clauses.append("sentiment_label = ?")
             values.append(label)
+        self._append_bvid_clause(clauses, values, bvid)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self.connect() as conn:
             row = conn.execute(
@@ -243,6 +255,7 @@ class Store:
         exclude_protected: bool = False,
         label: str | None = None,
         order: str = "fetched",
+        bvid: str | None = None,
     ) -> list[dict]:
         clauses: list[str] = []
         values: list[Any] = []
@@ -267,6 +280,7 @@ class Store:
         if label:
             clauses.append("sentiment_label = ?")
             values.append(label)
+        self._append_bvid_clause(clauses, values, bvid)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         # 默认按入库时间，避免样例假发布时间压过真实采集
         if order == "published":
@@ -295,12 +309,18 @@ class Store:
             ).fetchone()
         return self._post_row(row) if row else None
 
-    def list_review_posts(self, *, limit: int = 40) -> list[dict]:
+    def list_review_posts(self, *, limit: int = 40, bvid: str | None = None) -> list[dict]:
         """难例优先：uncertain → 低置信 BERT → 最近帖。"""
+        clauses: list[str] = []
+        values: list[Any] = []
+        self._append_bvid_clause(clauses, values, bvid)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        values.append(limit)
         with self.connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT * FROM posts
+                {where}
                 ORDER BY
                   CASE
                     WHEN sentiment_label = 'uncertain' THEN 0
@@ -315,18 +335,26 @@ class Store:
                   id DESC
                 LIMIT ?
                 """,
-                (limit,),
+                values,
             ).fetchall()
         return [self._post_row(row) for row in rows]
 
-    def list_post_texts(self, limit: int = 5000) -> list[dict]:
+    def list_post_texts(
+        self, limit: int = 5000, *, bvid: str | None = None
+    ) -> list[dict]:
+        clauses: list[str] = []
+        values: list[Any] = []
+        self._append_bvid_clause(clauses, values, bvid)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        values.append(limit)
         with self.connect() as conn:
             rows = conn.execute(
-                """SELECT id, text, topic, sentiment_label, sentiment_method
+                f"""SELECT id, text, topic, sentiment_label, sentiment_method
                    FROM posts
+                   {where}
                    ORDER BY id ASC
                    LIMIT ?""",
-                (limit,),
+                values,
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -376,26 +404,40 @@ class Store:
             )
         return len(updates)
 
-    def sentiment_stats(self) -> dict:
+    def sentiment_stats(self, *, bvid: str | None = None) -> dict:
         from src.services.sentiment import sentiment_model_status
+
+        clauses: list[str] = []
+        values: list[Any] = []
+        self._append_bvid_clause(clauses, values, bvid)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        and_prefix = f"{where} AND" if where else "WHERE"
 
         with self.connect() as conn:
             by_label = conn.execute(
-                """SELECT COALESCE(sentiment_label, 'unknown') AS label,
+                f"""SELECT COALESCE(sentiment_label, 'unknown') AS label,
                           COALESCE(sentiment_method, 'none') AS method,
                           COUNT(*) AS c
                    FROM posts
-                   GROUP BY label, method"""
+                   {where}
+                   GROUP BY label, method""",
+                values,
             ).fetchall()
-            total = conn.execute("SELECT COUNT(*) AS c FROM posts").fetchone()["c"]
+            total = conn.execute(
+                f"SELECT COUNT(*) AS c FROM posts {where}", values
+            ).fetchone()["c"]
             bert_done = conn.execute(
-                "SELECT COUNT(*) AS c FROM posts WHERE sentiment_method = 'bert'"
+                f"SELECT COUNT(*) AS c FROM posts {and_prefix} sentiment_method = 'bert'",
+                values,
             ).fetchone()["c"]
             uncertain = conn.execute(
-                "SELECT COUNT(*) AS c FROM posts WHERE sentiment_label = 'uncertain'"
+                f"SELECT COUNT(*) AS c FROM posts {and_prefix} sentiment_label = 'uncertain'",
+                values,
             ).fetchone()["c"]
             protected = conn.execute(
-                "SELECT COUNT(*) AS c FROM posts WHERE sentiment_method IN ('manual', 'llm')"
+                f"""SELECT COUNT(*) AS c FROM posts
+                   {and_prefix} sentiment_method IN ('manual', 'llm')""",
+                values,
             ).fetchone()["c"]
         model = sentiment_model_status(self)
         stale = bool(model.get("model_stale"))
@@ -415,6 +457,7 @@ class Store:
             "model_stale": stale,
             "model_id": model.get("model_id"),
             "model_id_applied": model.get("model_id_applied"),
+            "bvid": (bvid or "").strip() or None,
             "breakdown": [
                 {
                     "label": r["label"],
