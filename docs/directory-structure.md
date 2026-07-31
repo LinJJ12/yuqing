@@ -26,7 +26,7 @@ yuqing/
 
 | 路径 | 一句话职责 | 禁止 |
 |------|------------|------|
-| `docs/` | 跨端目录/架构约定（给人看） | 运行时代码、密钥 |
+| `docs/` | 产品说明与跨端约定（PRD / 定位 / 目录 / 架构） | 运行时代码、密钥 |
 | `.trellis/` | 合并计划、Gate、阶段验收 | 产品运行时资源、业务算法 |
 | `frontend/` | 界面、本机状态、调 BFF | 持有模型 Key、SQLite、推理 |
 | `backend/` | API、分析能力、持久化 | 页面组件、卡通/业务 CSS |
@@ -104,7 +104,9 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 
 | README | 覆盖 |
 |--------|------|
-| [`docs/README.md`](./README.md) | 跨端文档 |
+| [`docs/README.md`](./README.md) | 跨端文档索引 |
+| [`prd.md`](./prd.md) | 产品需求：用户 · 功能 · 主路径 |
+| [`positioning.md`](./positioning.md) | 定位与演进：是否舆情 · 路线图 |
 | [`diagrams.md`](./diagrams.md) | 流程 · 思维导图 · 架构图 |
 | [`model-cache.md`](./model-cache.md) | 演示就绪：模型预取 / Ollama |
 | [`real-data-collection.md`](./real-data-collection.md) | 内嵌 B 站评论 + 质量门禁 + MediaCrawler |
@@ -117,6 +119,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | [`../frontend/src/pages/README.md`](../frontend/src/pages/README.md) | 路由页面 |
 | [`../frontend/src/router/README.md`](../frontend/src/router/README.md) | 路由表 |
 | [`../frontend/src/components/README.md`](../frontend/src/components/README.md) | 共享组件 |
+| [`../frontend/src/components/layout/README.md`](../frontend/src/components/layout/README.md) | 壳层布局（侧栏 / 顶栏） |
 | [`../frontend/src/assets/README.md`](../frontend/src/assets/README.md) | 静态资源 |
 | [`../backend/README.md`](../backend/README.md) | 后端工程 |
 | [`../backend/src/README.md`](../backend/src/README.md) | 后端源码 |

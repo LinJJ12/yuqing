@@ -132,11 +132,33 @@ def _probe_llm() -> dict[str, Any]:
     }
 
 
+def _probe_bilibili() -> dict[str, Any]:
+    """仅探测是否配置了 SESSDATA，绝不回传 Cookie 内容。"""
+    from src.services.bilibili_collect import _has_sessdata
+
+    configured = _has_sessdata()
+    return {
+        "ok": configured,
+        "configured": configured,
+        "message": (
+            "已配置 B 站登录态（SESSDATA），评论采集更稳定"
+            if configured
+            else "未配置 BILIBILI_SESSDATA，评论量可能偏少或易被风控"
+        ),
+        "hint": (
+            ""
+            if configured
+            else "在 backend/.env 填写 BILIBILI_SESSDATA（可从浏览器 Cookie 复制），保存后重启后端。"
+        ),
+    }
+
+
 def build_readiness() -> dict[str, Any]:
     device_info = get_device_info()
     sentiment = _probe_sentiment_cache()
     ollama = _probe_ollama()
     llm = _probe_llm()
+    bilibili = _probe_bilibili()
     try:
         from src.services.agent import agent_status
 
@@ -154,6 +176,8 @@ def build_readiness() -> dict[str, Any]:
         blockers.append("未安装 torch，无法跑情感模型")
     if not sentiment["cached"]:
         warnings.append("情感模型未缓存，演示前请先预取或确保可访问 HF 镜像")
+    if not bilibili["configured"]:
+        warnings.append("未配置 B 站 Cookie（BILIBILI_SESSDATA），演示采集评论量可能偏少")
     if settings.embedding_backend == "ollama" and not ollama["ok"]:
         warnings.append("Ollama/嵌入模型未就绪，BERTopic 可能失败（词云仍可用）")
     if not agent.get("ready"):
@@ -174,6 +198,7 @@ def build_readiness() -> dict[str, Any]:
             "torch_version": device_info["torch_version"],
         },
         "sentiment": sentiment,
+        "bilibili": bilibili,
         "ollama": ollama,
         "llm": llm,
         # 兼容旧前端字段名

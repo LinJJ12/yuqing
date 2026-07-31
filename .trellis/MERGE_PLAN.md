@@ -17,6 +17,8 @@
 **目标产品定位（大创）**  
 多平台观众反馈 / B 站评论口碑监测（校园样例可选）：导入或采集 → GPU 情感 → 主题/趋势 → 预警与报告 → Vue 工作台。
 
+正式产品说明见 [`docs/prd.md`](../docs/prd.md)、定位与演进见 [`docs/positioning.md`](../docs/positioning.md)。
+
 ---
 
 ## 1. Plan（合并架构）

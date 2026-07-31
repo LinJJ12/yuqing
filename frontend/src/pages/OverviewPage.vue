@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   MessageSquareText,
@@ -376,7 +377,7 @@ onMounted(async () => {
   }
   // 等 loading=false 后图表 DOM 才挂载，再绘制
   await nextTick()
-  renderAll()
+  if (total.value > 0) renderAll()
 })
 
 onBeforeUnmount(() => {
@@ -411,6 +412,37 @@ onBeforeUnmount(() => {
       <div class="skeleton" style="width: 70%" />
     </div>
     <p v-else-if="error" class="screen-card err">{{ error }}</p>
+
+    <template v-else-if="total === 0">
+      <section class="screen-card first-run">
+        <h3>开始第一次演示</h3>
+        <p class="first-run-lead">
+          库内还没有帖子。按下面三步即可跑通「采集 → 情感 → 口碑」。
+        </p>
+        <ol class="first-run-steps">
+          <li>
+            <b>监测：贴 BV 采集评论</b>
+            <p>打开监测页，粘贴 B 站视频链接或 BV 号，开始采集并入库。</p>
+            <RouterLink class="btn btn-primary btn-sm" to="/monitor">去监测</RouterLink>
+          </li>
+          <li>
+            <b>情感：确认分析完成</b>
+            <p>采集后会自动排队情感分析；也可在情感页手动跑批。</p>
+            <RouterLink class="btn btn-secondary btn-sm" to="/sentiment">去情感</RouterLink>
+          </li>
+          <li>
+            <b>报告：看单视频口碑</b>
+            <p>情感跑完后，在报告页查看该视频的口碑结论与样例评论。</p>
+            <RouterLink class="btn btn-secondary btn-sm" to="/reports">去报告</RouterLink>
+          </li>
+        </ol>
+        <p class="hint">
+          演示前可先到
+          <RouterLink to="/settings">设置</RouterLink>
+          检查情感模型缓存与 B 站 Cookie 是否就绪。
+        </p>
+      </section>
+    </template>
 
     <template v-else>
       <div class="kpi-row">
@@ -537,6 +569,44 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.first-run {
+  max-width: 40rem;
+  padding: 1.25rem 1.35rem 1.4rem;
+}
+.first-run h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+.first-run-lead {
+  margin: 0 0 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.first-run-steps {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.first-run-steps li {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+.first-run-steps b {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+.first-run-steps p {
+  margin: 0 0 0.55rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
 .overview-screen {
   color: var(--text-primary);
 }

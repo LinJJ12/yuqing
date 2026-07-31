@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { Download, ExternalLink, FileText, RefreshCw, Sparkles } from '@lucide/vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -81,16 +81,26 @@ const videoTotal = computed(() => videoReport.value?.overview?.total_posts ?? 0)
 
 const videoStatLine = computed(() => {
   const s = videoSentiment.value
+  const pending = videoReport.value?.sentiment?.pending ?? s.unknown ?? 0
   return [
     `${videoTotal.value} 评`,
     `正 ${s.positive ?? 0}`,
     `中 ${s.neutral ?? 0}`,
     `负 ${s.negative ?? 0}`,
     (s.uncertain ?? 0) > 0 ? `不确定 ${s.uncertain}` : '',
+    pending > 0 ? `未标注 ${pending}` : '',
   ]
     .filter(Boolean)
     .join(' · ')
 })
+
+const sentimentPending = computed(
+  () =>
+    !!(
+      videoReport.value?.sentiment_pending ||
+      videoReport.value?.sentiment?.sentiment_pending
+    ),
+)
 
 function onPickVideo(e) {
   const v = e.target.value
@@ -617,6 +627,13 @@ onBeforeUnmount(() => {
             >
               {{ videoReport.conclusion_source === 'llm' ? '智能观众反馈' : '规则摘要' }}
             </span>
+            <RouterLink
+              v-if="videoReport.bvid"
+              class="btn btn-ghost btn-sm"
+              :to="{ path: '/agent', query: { bvid: videoReport.bvid } }"
+            >
+              用助手解读
+            </RouterLink>
             <button
               type="button"
               class="btn btn-secondary btn-sm"
@@ -627,6 +644,13 @@ onBeforeUnmount(() => {
               {{ aiLoading ? '生成中…' : '智能重写' }}
             </button>
           </div>
+        </div>
+        <div v-if="sentimentPending" class="pending-banner">
+          情感分析尚未完成（BERT
+          {{ videoReport.sentiment?.bert_done ?? 0 }}/{{ videoReport.sentiment?.total ?? videoTotal }}）。
+          口碑结论仅供参考，请先到
+          <RouterLink to="/sentiment">情感页</RouterLink>
+          确认进度。
         </div>
         <div class="conclusion" :class="{ ai: videoReport.conclusion_source === 'llm' }">
           {{ videoReport.conclusion }}
@@ -937,8 +961,18 @@ onBeforeUnmount(() => {
   gap: 0.45rem;
   flex-wrap: wrap;
 }
+.pending-banner {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: rgba(217, 119, 6, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  color: #92400e;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
 .conclusion {
-  margin: 0;
+  margin: 0.75rem 0 0;
   padding: 0.85rem 1rem;
   background: rgba(22, 163, 74, 0.06);
   border: 1px solid rgba(22, 163, 74, 0.18);

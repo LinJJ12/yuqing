@@ -15,6 +15,8 @@
 | `GATE.md` | 已确认的技术选型（Vue / SQLite / BERT / Ollama 等） |
 | `README.md` | 本说明 |
 
+产品级说明（面向谁、定位、演进）不在本目录，见 [`docs/prd.md`](../docs/prd.md)、[`docs/positioning.md`](../docs/positioning.md)。
+
 ## 禁止
 
 - 当作运行时配置目录（端口、模型路径应在 `backend/.env`）

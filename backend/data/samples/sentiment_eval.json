@@ -1,0 +1,14 @@
+[
+  {"text": "这期剪辑太好看了，强烈推荐，已三连", "label": "positive"},
+  {"text": "UP主更新辛苦了，支持一下", "label": "positive"},
+  {"text": "质量很高，讲解清楚，学到了", "label": "positive"},
+  {"text": "一般看看就行，没什么特别的", "label": "neutral"},
+  {"text": "中规中矩，过路过路", "label": "neutral"},
+  {"text": "就那样吧，不好不坏", "label": "neutral"},
+  {"text": "差评劝退，浪费时间太离谱了", "label": "negative"},
+  {"text": "注水水文，看不下去", "label": "negative"},
+  {"text": "翻车了，内容太烂", "label": "negative"},
+  {"text": "不好看", "label": "negative"},
+  {"text": "哈哈哈哈哈", "label": "neutral"},
+  {"text": "前半很好，后半注水失望", "label": "negative"}
+]

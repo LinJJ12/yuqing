@@ -11,7 +11,7 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
-EVAL_PATH = BACKEND / "data" / "sentiment_eval.json"
+EVAL_PATH = BACKEND / "data" / "samples" / "sentiment_eval.json"
 
 
 def main() -> None:

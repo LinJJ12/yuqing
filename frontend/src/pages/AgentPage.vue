@@ -1,23 +1,82 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { Bot, Copy, FileText, Send } from '@lucide/vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
+import { Bot, Copy, Eraser, FileText, Send } from '@lucide/vue'
+import MarkdownContent from '../components/MarkdownContent.vue'
 import { agentBrief, agentChat, fetchAgentStatus } from '../api/client'
 
 const route = useRoute()
-const question = ref('该视频评论负面主要集中在哪些点？有什么建议？')
-const bvid = ref('')
-const history = ref([])
-const answer = ref('')
-const digest = ref(null)
-const brief = ref('')
-const briefMeta = ref(null)
+const STORAGE_KEY = 'zhiwei.agent.session'
+const DEFAULT_Q_VIDEO = '该视频评论负面主要集中在哪些点？有什么建议？'
+const DEFAULT_Q_GLOBAL = '当前库里整体口碑如何？有哪些需要关注的风险？'
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    return data && typeof data === 'object' ? data : null
+  } catch {
+    return null
+  }
+}
+
+function saveSession(payload) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+const saved = loadSession()
+
+const question = ref(typeof saved?.question === 'string' ? saved.question : DEFAULT_Q_VIDEO)
+const bvid = ref(typeof saved?.bvid === 'string' ? saved.bvid : '')
+const history = ref(Array.isArray(saved?.history) ? saved.history : [])
+const answer = ref(typeof saved?.answer === 'string' ? saved.answer : '')
+const digest = ref(saved?.digest && typeof saved.digest === 'object' ? saved.digest : null)
+const brief = ref(typeof saved?.brief === 'string' ? saved.brief : '')
+const briefMeta = ref(saved?.briefMeta && typeof saved.briefMeta === 'object' ? saved.briefMeta : null)
 const status = ref(null)
-const showDigest = ref(false)
+const showDigest = ref(Boolean(saved?.showDigest))
 const loadingChat = ref(false)
 const loadingBrief = ref(false)
 const error = ref('')
-const message = ref('')
+const message = ref(typeof saved?.message === 'string' ? saved.message : '')
+
+const digestSummary = computed(() => {
+  const d = digest.value
+  if (!d || typeof d !== 'object') return ''
+  const parts = []
+  if (d.scope === 'video') parts.push('范围：单视频')
+  else if (d.scope) parts.push(`范围：${d.scope}`)
+  if (d.bvid) parts.push(`BV ${d.bvid}`)
+  if (d.video_title) parts.push(String(d.video_title).slice(0, 40))
+  if (d.total_posts != null) parts.push(`帖子 ${d.total_posts}`)
+  if (d.comment_count != null) parts.push(`评论 ${d.comment_count}`)
+  if (d.alerts_high != null) parts.push(`高风险预警 ${d.alerts_high}`)
+  // by_sentiment 可能是数组 [{label,count}] 或对象
+  const by = d.by_sentiment || d.sentiment?.by_label
+  if (Array.isArray(by)) {
+    const bits = by
+      .filter((x) => x && x.label && x.label !== 'unknown')
+      .slice(0, 4)
+      .map((x) => {
+        const name =
+          x.label === 'positive' ? '正' : x.label === 'neutral' ? '中' : x.label === 'negative' ? '负' : x.label
+        return `${name} ${x.count}`
+      })
+    if (bits.length) parts.push(bits.join(' · '))
+  } else if (by && typeof by === 'object') {
+    const bits = ['positive', 'neutral', 'negative']
+      .filter((k) => by[k] != null)
+      .map((k) => `${k === 'positive' ? '正' : k === 'neutral' ? '中' : '负'} ${by[k]}`)
+    if (bits.length) parts.push(bits.join(' · '))
+  }
+  if (d.conclusion) parts.push(`结论摘要已附带`)
+  return parts.join(' · ') || '已附带库内上下文'
+})
 
 async function refreshStatus() {
   const res = await fetchAgentStatus()
@@ -95,12 +154,57 @@ async function copyBrief() {
   }
 }
 
+function clearSession() {
+  answer.value = ''
+  digest.value = null
+  history.value = []
+  brief.value = ''
+  briefMeta.value = null
+  showDigest.value = false
+  message.value = ''
+  error.value = ''
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 watch(
   () => route.query.bvid,
   (v) => {
     if (v) bvid.value = String(v)
   },
   { immediate: true },
+)
+
+watch(
+  () => bvid.value.trim(),
+  (has) => {
+    const q = question.value.trim()
+    if (!q || q === DEFAULT_Q_VIDEO || q === DEFAULT_Q_GLOBAL) {
+      question.value = has ? DEFAULT_Q_VIDEO : DEFAULT_Q_GLOBAL
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  [bvid, question, history, answer, digest, brief, briefMeta, message, showDigest],
+  () => {
+    saveSession({
+      bvid: bvid.value,
+      question: question.value,
+      history: history.value,
+      answer: answer.value,
+      digest: digest.value,
+      brief: brief.value,
+      briefMeta: briefMeta.value,
+      message: message.value,
+      showDigest: showDigest.value,
+    })
+  },
+  { deep: true },
 )
 
 onMounted(async () => {
@@ -129,6 +233,11 @@ onMounted(async () => {
         {{ status?.message }}
       </p>
       <p v-if="status?.hint" class="hint">{{ status.hint }}</p>
+      <p v-if="status && !status.ready" class="hint warn-cta">
+        助手未就绪时问答/简报不可用。请到
+        <RouterLink to="/settings">设置</RouterLink>
+        检查云端 LLM 或本机对话模型。
+      </p>
       <label class="field">
         视频号 / 链接（可选，限定单视频）
         <input v-model="bvid" class="input" placeholder="留空=全局；填写后按该视频评论回答" />
@@ -145,17 +254,26 @@ onMounted(async () => {
         v-model="question"
         class="textarea"
         rows="3"
-        placeholder="例如：该视频评论负面主要集中在哪些点？"
+        :placeholder="bvid.trim() ? DEFAULT_Q_VIDEO : DEFAULT_Q_GLOBAL"
       />
       <div class="actions">
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="loadingChat || loadingBrief"
+          :disabled="loadingChat || loadingBrief || status?.ready === false"
           @click="onAsk"
         >
           <Send :size="16" />
           {{ loadingChat ? '思考中…' : '提问' }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :disabled="!answer && !brief && !history.length"
+          @click="clearSession"
+        >
+          <Eraser :size="16" />
+          清空结果
         </button>
       </div>
       <div v-if="answer" class="answer-box">
@@ -163,11 +281,12 @@ onMounted(async () => {
           <Bot :size="16" />
           <b>回答</b>
         </header>
-        <p class="answer-text">{{ answer }}</p>
+        <MarkdownContent class="answer-md" :source="answer" />
         <button type="button" class="btn btn-ghost btn-sm" @click="showDigest = !showDigest">
           {{ showDigest ? '收起' : '展开' }}引用摘要
         </button>
-        <pre v-if="showDigest && digest" class="digest">{{ JSON.stringify(digest, null, 2) }}</pre>
+        <p v-if="showDigest && digestSummary" class="digest-human">{{ digestSummary }}</p>
+        <pre v-else-if="showDigest && digest" class="digest">{{ JSON.stringify(digest, null, 2) }}</pre>
       </div>
     </section>
 
@@ -178,7 +297,7 @@ onMounted(async () => {
           <button
             type="button"
             class="btn btn-primary btn-sm"
-            :disabled="loadingChat || loadingBrief"
+            :disabled="loadingChat || loadingBrief || status?.ready === false"
             @click="onBrief"
           >
             <FileText :size="14" />
@@ -199,7 +318,7 @@ onMounted(async () => {
         {{ bvid.trim() ? '将基于该视频评论生成观众反馈简报。' : '全局简报：态势 / 话题 / 风险 / 建议。' }}
       </p>
       <h4 v-if="briefMeta?.title">{{ briefMeta.title }}</h4>
-      <p v-if="brief" class="answer-text brief">{{ brief }}</p>
+      <MarkdownContent v-if="brief" class="answer-md brief" :source="brief" />
       <p v-else class="hint">尚未生成简报。</p>
     </section>
   </div>
@@ -214,43 +333,43 @@ onMounted(async () => {
   font-size: 0.88rem;
   color: var(--text-secondary);
 }
+.warn-cta {
+  color: #b45309;
+}
 .actions {
   display: flex;
   gap: 0.6rem;
   margin: 0.75rem 0;
 }
-.head-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
 .answer-box {
-  margin-top: 0.85rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
 }
-.answer-text {
-  margin: 0.5rem 0;
+.answer-md {
+  margin-top: 0.35rem;
+}
+.answer-md.brief {
+  margin-top: 0.5rem;
+}
+.digest-human {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  line-height: 1.7;
-  white-space: pre-wrap;
-}
-.answer-text.brief {
-  padding: 0.85rem 1rem;
-  background: var(--bg-tertiary);
-  border-left: 2px solid var(--color-primary);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  line-height: 1.45;
 }
 .digest {
   margin-top: 0.5rem;
-  padding: 0.75rem;
-  font-size: 0.78rem;
-  overflow: auto;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--color-border);
+  padding: 0.65rem 0.75rem;
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  overflow: auto;
+  max-height: 14rem;
 }
-.pill-ok {
-  background: rgba(22, 163, 74, 0.08);
-  color: var(--color-success);
-  border: 1px solid rgba(22, 163, 74, 0.2);
+.head-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 </style>

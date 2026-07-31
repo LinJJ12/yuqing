@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { RefreshCw } from '@lucide/vue'
 import { fetchAlerts, fetchTrends } from '../api/client'
 import * as echarts from 'echarts'
@@ -229,6 +230,24 @@ onBeforeUnmount(() => {
             </header>
             <p>{{ item.message }}</p>
             <small v-if="item.keywords?.length">关键词：{{ item.keywords.join('、') }}</small>
+            <div class="alert-links">
+              <RouterLink
+                v-if="item.bvid"
+                class="link-out"
+                :to="{ path: '/reports', query: { bvid: item.bvid } }"
+              >
+                看口碑
+              </RouterLink>
+              <a
+                v-if="item.source_url"
+                class="link-out"
+                :href="item.source_url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                原评
+              </a>
+            </div>
           </article>
           <p v-if="!filteredItems.length" class="hint">
             {{
@@ -241,7 +260,15 @@ onBeforeUnmount(() => {
       </div>
     </section>
     <section v-else-if="!loading && !error" class="panel">
-      <p class="hint">暂无预警。可先到「情感」页完成分析，或导入含负面内容的样例。</p>
+      <p class="hint">
+        暂无预警。建议路径：
+        <RouterLink to="/monitor">监测</RouterLink>
+        采 BV →
+        <RouterLink to="/sentiment">情感</RouterLink>
+        跑完 →
+        <RouterLink to="/settings">设置</RouterLink>
+        核对敏感词。负面评论经情感标注后会出现在此。
+      </p>
     </section>
   </div>
 </template>
@@ -297,6 +324,12 @@ onBeforeUnmount(() => {
 .alert-item p {
   margin: 0.35rem 0;
   color: var(--text-secondary);
+}
+.alert-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
 }
 .alert-item small {
   color: var(--text-tertiary);

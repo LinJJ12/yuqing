@@ -14,6 +14,8 @@
 | `generate_sample_data.py` | 写入 `backend/data/samples/campus_sample.json` |
 | `convert_mediacrawler.py` | MediaCrawler 导出 → 知微可导入 JSON |
 | `prefetch_models.py` | 预取情感模型到本机 HF 缓存（演示防翻车） |
+| `eval_sentiment.py` | 对照 `data/samples/sentiment_eval.json` 评测当前情感模型 |
+| `rerun_sentiment.py` | 全量重跑库内情感（换模 / 回填 confidence） |
 | `smoke_test.py` | 规范化 / API / CUDA 等断言 |
 
 ## 用法
@@ -23,6 +25,8 @@
 uv run python backend/scripts/generate_sample_data.py
 uv run python backend/scripts/convert_mediacrawler.py backend/data/samples/mediacrawler_xhs_fixture.json --platform xhs
 uv run python backend/scripts/prefetch_models.py
+uv run python backend/scripts/eval_sentiment.py
+uv run python backend/scripts/rerun_sentiment.py
 uv run python backend/scripts/smoke_test.py
 ```
 

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { RefreshCw, Save } from '@lucide/vue'
 import {
   fetchAlertKeywords,
@@ -19,6 +20,40 @@ const analysis = ref(null)
 const keywordsText = ref('')
 
 const readiness = computed(() => health.value?.readiness || analysis.value?.readiness || null)
+
+const demoChecklist = computed(() => {
+  const r = readiness.value
+  if (!r) return []
+  return [
+    {
+      key: 'sentiment',
+      ok: !!r.sentiment?.ok,
+      label: '情感模型缓存',
+      detail: r.sentiment?.ok
+        ? r.sentiment.message
+        : r.sentiment?.hint || '运行 uv run python backend/scripts/prefetch_models.py',
+    },
+    {
+      key: 'bilibili',
+      ok: !!r.bilibili?.configured,
+      label: 'B 站登录态（Cookie）',
+      detail: r.bilibili?.configured
+        ? r.bilibili.message
+        : r.bilibili?.hint || '在 backend/.env 配置 BILIBILI_SESSDATA 后重启后端',
+    },
+    {
+      key: 'llm',
+      ok: !!((r.llm || r.deepseek)?.configured) || !!r.agent?.ready,
+      label: '云端 LLM / 助手（可选）',
+      detail: (r.llm || r.deepseek)?.configured
+        ? (r.llm || r.deepseek).message
+        : r.agent?.ready
+          ? r.agent.message
+          : '未配置也可演示；报告智能摘要与助手需 OPENAI_* 或 Ollama Chat',
+      optional: true,
+    },
+  ]
+})
 
 function tone(ok, warn = false) {
   if (ok) return 'ok'
@@ -104,6 +139,27 @@ onMounted(refresh)
           <template v-else>服务在线，但情感模型未缓存 — 请先预取模型</template>
         </div>
 
+        <h4>演示前 3 步</h4>
+        <ol class="demo-checklist">
+          <li v-for="step in demoChecklist" :key="step.key" :class="{ done: step.ok }">
+            <span class="check-mark">{{ step.ok ? '✓' : step.optional ? '○' : '!' }}</span>
+            <div>
+              <b>{{ step.label }}{{ step.optional ? '（可选）' : '' }}</b>
+              <p>{{ step.detail }}</p>
+            </div>
+          </li>
+        </ol>
+        <p class="hint">
+          预取命令：
+          <code class="mono-inline">uv run python backend/scripts/prefetch_models.py</code>
+          · 采完 BV 后去
+          <RouterLink to="/monitor">监测</RouterLink>
+          /
+          <RouterLink to="/sentiment">情感</RouterLink>
+          /
+          <RouterLink to="/reports">报告</RouterLink>
+        </p>
+
         <div class="kpi-grid" style="margin-top: 1rem; margin-bottom: 0">
           <div class="kpi">
             <div class="kpi-label"><span>帖子总量</span></div>
@@ -135,6 +191,24 @@ onMounted(refresh)
             <p>{{ readiness.sentiment?.message }}</p>
             <small v-if="readiness.sentiment?.hint">{{ readiness.sentiment.hint }}</small>
             <small class="mono">{{ readiness.sentiment?.model_id }}</small>
+          </article>
+
+          <article
+            class="ready-card"
+            :class="tone(readiness.bilibili?.configured, readiness.bilibili && !readiness.bilibili.configured)"
+          >
+            <header>
+              <b>B 站登录态</b>
+              <span
+                class="pill"
+                :class="readiness.bilibili?.configured ? 'pill-ok' : 'pill-warning'"
+              >
+                {{ readiness.bilibili?.configured ? '已配置' : '未配置' }}
+              </span>
+            </header>
+            <p>{{ readiness.bilibili?.message || '未探测到 B 站 Cookie 状态' }}</p>
+            <small v-if="readiness.bilibili?.hint">{{ readiness.bilibili.hint }}</small>
+            <small class="mono">环境变量 BILIBILI_SESSDATA（不回显内容）</small>
           </article>
 
           <article class="ready-card" :class="tone(readiness.ollama?.ok, readiness.ollama?.reachable)">
@@ -244,7 +318,7 @@ onMounted(refresh)
         v-model="keywordsText"
         class="textarea"
         rows="8"
-        placeholder="投诉&#10;差评&#10;故障"
+        placeholder="劝退&#10;翻车&#10;注水&#10;看不下去"
       />
       <p v-if="message" class="ok-text">{{ message }}</p>
       <p v-if="saveError" class="err">{{ saveError }}</p>
@@ -308,5 +382,48 @@ onMounted(refresh)
   background: rgba(22, 163, 74, 0.08);
   color: var(--color-success);
   border: 1px solid rgba(22, 163, 74, 0.2);
+}
+.demo-checklist {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.demo-checklist li {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+.demo-checklist li.done {
+  border-color: rgba(22, 163, 74, 0.3);
+}
+.demo-checklist .check-mark {
+  flex-shrink: 0;
+  width: 1.25rem;
+  text-align: center;
+  font-weight: 700;
+  color: #b45309;
+}
+.demo-checklist li.done .check-mark {
+  color: var(--color-success);
+}
+.demo-checklist b {
+  display: block;
+  font-size: 0.9rem;
+}
+.demo-checklist p {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.mono-inline {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.82rem;
 }
 </style>

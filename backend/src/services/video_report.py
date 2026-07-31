@@ -46,12 +46,20 @@ def _sentiment_breakdown(posts: list[dict[str, Any]]) -> dict[str, Any]:
         for (lab, meth), cnt in sorted(pair.items(), key=lambda x: (-x[1], x[0][0], x[0][1]))
     ]
     bert_done = sum(1 for p in posts if p.get("sentiment_method") == "bert")
+    unknown = int(by_label.get("unknown") or 0)
+    labeled = len(posts) - unknown
+    pending_ratio = (unknown / len(posts)) if posts else 0.0
+    # 未标注才算「未完成」；已人工/LLM 改判的不算 pending（勿仅用 bert_done < total）
     return {
         "breakdown": detailed or breakdown,
         "by_label": dict(by_label),
         "by_method": dict(by_method),
         "bert_done": bert_done,
         "total": len(posts),
+        "labeled": labeled,
+        "pending": unknown,
+        "pending_ratio": round(pending_ratio, 4),
+        "sentiment_pending": unknown > 0,
     }
 
 
@@ -61,15 +69,27 @@ def _rule_conclusion(
     by_label: dict[str, int],
     top_words: list[dict[str, Any]],
     keyword_hits: list[str],
+    bert_done: int = 0,
 ) -> str:
     if total <= 0:
         return "暂无该视频的评论数据，请先在监测页按 BV 采集。"
+
+    unknown = int(by_label.get("unknown") or 0)
+    labeled = max(total - unknown, 0)
+    pending = unknown > 0
+    prefix = ""
+    if pending:
+        prefix = f"情感分析未完成（已标注 {labeled}/{total}，BERT {bert_done}）。"
+
+    if labeled <= 0:
+        return prefix + "请先到「情感」页完成分析后再看口碑定论。"
+
     pos = by_label.get("positive", 0)
     neu = by_label.get("neutral", 0)
     neg = by_label.get("negative", 0)
     unc = by_label.get("uncertain", 0)
-    pos_r = pos / total
-    neg_r = neg / total
+    pos_r = pos / labeled
+    neg_r = neg / labeled
     if neg_r >= 0.45:
         tone = "整体偏负"
     elif pos_r >= 0.45:
@@ -80,23 +100,27 @@ def _rule_conclusion(
         tone = "情绪分化明显"
 
     parts = [
-        f"共分析 {total} 条评论：正面 {pos}（{pos_r:.0%}）、"
-        f"中性 {neu}（{neu / total:.0%}）、负面 {neg}（{neg_r:.0%}）"
-        + (f"、不确定 {unc}（{unc / total:.0%}）" if unc else "")
-        + f"。{tone}。"
+        prefix,
+        f"基于已标注 {labeled} 条（共 {total}）：正面 {pos}（{pos_r:.0%}）、"
+        f"中性 {neu}（{neu / labeled:.0%}）、负面 {neg}（{neg_r:.0%}）"
+        + (f"、不确定 {unc}（{unc / labeled:.0%}）" if unc else "")
+        + f"。{tone}。",
     ]
+    if pending:
+        parts.append("以下倾向仅供参考，跑完情感后再下定论。")
     if top_words:
         words = "、".join(str(w.get("name")) for w in top_words[:6] if w.get("name"))
         if words:
             parts.append(f"高频词集中在：{words}。")
     if keyword_hits:
         parts.append(f"敏感词命中：{'、'.join(keyword_hits[:8])}。")
-    if neg_r >= 0.35:
-        parts.append("建议关注差评集中点，再决定是否需要回复或调整内容。")
-    elif pos_r >= 0.5:
-        parts.append("观众反馈偏积极，可提炼好评点用于简介或后续选题。")
-    else:
-        parts.append("建议结合负面样例与高频词，定位具体槽点后再做内容迭代。")
+    if not pending:
+        if neg_r >= 0.35:
+            parts.append("建议关注差评集中点，再决定是否需要回复或调整内容。")
+        elif pos_r >= 0.5:
+            parts.append("观众反馈偏积极，可提炼好评点用于简介或后续选题。")
+        else:
+            parts.append("建议结合负面样例与高频词，定位具体槽点后再做内容迭代。")
     return "".join(parts)
 
 
@@ -137,6 +161,10 @@ def build_video_report(
                 "by_label": {},
                 "bert_done": 0,
                 "total": 0,
+                "labeled": 0,
+                "pending": 0,
+                "pending_ratio": 0.0,
+                "sentiment_pending": False,
             },
             "word_cloud": [],
             "keyword_topics": [],
@@ -145,6 +173,7 @@ def build_video_report(
             "rule_conclusion": empty_conclusion,
             "conclusion": empty_conclusion,
             "conclusion_source": "rule",
+            "sentiment_pending": False,
             "notes": [
                 "范围：raw.extra.bvid 匹配的评论。",
                 "采集入库后会自动排队 BERT；也可在情感页全量重跑。",
@@ -216,7 +245,22 @@ def build_video_report(
         by_label=by_label,
         top_words=word_cloud,
         keyword_hits=keyword_hits,
+        bert_done=int(sentiment.get("bert_done") or 0),
     )
+    sentiment_pending = bool(sentiment.get("sentiment_pending"))
+    notes = [
+        f"范围：bvid={bvid} 下 {len(posts)} 条评论。",
+        "默认结论为规则摘要；可点「AI 生成观众反馈」调用 LLM 重写。",
+        "情感以库内标注为准；BERT 低置信为 uncertain；未跑 BERT 时预警降权。",
+    ]
+    if sentiment_pending:
+        notes.insert(
+            0,
+            (
+                f"情感分析未完成：已标注 {sentiment.get('labeled', 0)}/{len(posts)}"
+                f"（BERT {sentiment.get('bert_done', 0)}）。请到「情感」页确认进度后再下定论。"
+            ),
+        )
 
     report = {
         "bvid": bvid,
@@ -243,11 +287,8 @@ def build_video_report(
         "rule_conclusion": conclusion,
         "conclusion": conclusion,
         "conclusion_source": "rule",
-        "notes": [
-            f"范围：bvid={bvid} 下 {len(posts)} 条评论。",
-            "默认结论为规则摘要；可点「AI 生成观众反馈」调用 LLM 重写。",
-            "情感以库内标注为准；BERT 低置信为 uncertain；未跑 BERT 时预警降权。",
-        ],
+        "sentiment_pending": sentiment_pending,
+        "notes": notes,
     }
     if with_ai:
         return apply_video_ai_conclusion(report)

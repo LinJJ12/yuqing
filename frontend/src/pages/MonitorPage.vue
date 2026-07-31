@@ -30,11 +30,13 @@ const collecting = ref(false)
 const biliMessage = ref('')
 const biliError = ref('')
 const lastCollectedBvid = ref('')
+const lastCollectStats = ref(null)
 const showKeywordSearch = ref(false)
 const filterTitles = ref(true)
+const requireKeywordHit = ref(true)
 const filterComments = ref(true)
 
-const cleanTitle = ref('封校疑云')
+const cleanTitle = ref('')
 const cleaning = ref(false)
 const cleanMessage = ref('')
 const cleanError = ref('')
@@ -180,6 +182,8 @@ async function submit() {
 async function submitBili() {
   biliError.value = ''
   biliMessage.value = ''
+  lastCollectStats.value = null
+  lastCollectedBvid.value = ''
   if (!biliKeyword.value.trim() && !biliVideo.value.trim()) {
     biliError.value = '请填写视频链接或视频号（推荐），或展开关键词搜索'
     return
@@ -193,12 +197,13 @@ async function submitBili() {
       max_videos: Number(biliMaxVideos.value) || 2,
       max_comments_per_video: Number(biliMaxComments.value) || 50,
       include_video_title: false,
-      filter_titles: filterTitles.value,
+      filter_titles: showKeywordSearch.value ? filterTitles.value : false,
       filter_comments: filterComments.value,
-      require_keyword_hit: filterTitles.value,
+      require_keyword_hit: showKeywordSearch.value ? requireKeywordHit.value : false,
     })
     if (!res.ok) {
       biliError.value = res.error?.message || 'B 站采集失败'
+      lastCollectStats.value = null
       return
     }
     const s = res.data.stats || {}
@@ -206,10 +211,15 @@ async function submitBili() {
     const titles = videos.map((v) => v.title || v.bvid).filter(Boolean).slice(0, 3)
     const firstBvid = videos.find((v) => v.bvid)?.bvid
     lastCollectedBvid.value = firstBvid || ''
+    lastCollectStats.value = s
     const notes = (s.notes || []).join('；')
+    const noiseSum = Object.values(s.noise_filtered || {}).reduce((a, b) => a + Number(b || 0), 0)
+    const rejectedN = (s.videos_rejected || []).length
     biliMessage.value =
       `采集完成：视频 ${videos.length}，评论入库 ${s.inserted ?? 0}` +
-      (s.rejected ? `，去噪 ${s.rejected}` : '') +
+      (noiseSum || s.rejected ? `，去噪 ${noiseSum || s.rejected}` : '') +
+      (rejectedN ? `，跳过视频 ${rejectedN}` : '') +
+      (s.logged_in === false ? '，未登录 Cookie' : '') +
       (titles.length ? `；样例：${titles.join(' / ')}` : '') +
       (notes ? `。${notes}` : '')
     listPlatform.value = 'bili'
@@ -377,11 +387,18 @@ onMounted(async () => {
                     max="10"
                   />
                 </label>
+                <label class="check-row">
+                  <input v-model="filterTitles" type="checkbox" />
+                  过滤娱乐向标题（黑名单）
+                </label>
+                <label class="check-row">
+                  <input v-model="requireKeywordHit" type="checkbox" />
+                  标题须命中搜索词
+                </label>
               </template>
-              <label class="check-row">
-                <input v-model="filterTitles" type="checkbox" />
-                过滤娱乐向标题
-              </label>
+              <p v-else class="hint gate-hint">
+                当前为 BV 直采：标题黑名单 / 须命中搜索词仅在关键词搜索时生效。
+              </p>
               <label class="check-row">
                 <input v-model="filterComments" type="checkbox" />
                 过滤空评 / 刷评
@@ -392,16 +409,43 @@ onMounted(async () => {
               {{ collecting ? '采集中…' : '开始采集并入库' }}
             </button>
           </div>
-          <p v-if="biliMessage" class="ok-text status-line">
-            {{ biliMessage }}
-            <RouterLink
-              v-if="lastCollectedBvid"
-              class="link-out"
-              :to="{ path: '/reports', query: { bvid: lastCollectedBvid } }"
+          <div v-if="biliMessage || lastCollectStats" class="collect-result">
+            <p v-if="biliMessage" class="ok-text status-line">{{ biliMessage }}</p>
+            <ul v-if="lastCollectStats" class="stats-chips">
+              <li>入库 {{ lastCollectStats.inserted ?? 0 }}</li>
+              <li v-if="lastCollectStats.logged_in != null">
+                Cookie {{ lastCollectStats.logged_in ? '已登录' : '未配置' }}
+              </li>
+              <li v-if="(lastCollectStats.videos_rejected || []).length">
+                跳过视频 {{ lastCollectStats.videos_rejected.length }}
+              </li>
+              <li v-if="lastCollectStats.sentiment_job_id">情感任务已排队</li>
+            </ul>
+            <details
+              v-if="(lastCollectStats?.videos_rejected || []).length"
+              class="rejected-fold"
             >
-              查看口碑 →
-            </RouterLink>
-          </p>
+              <summary>查看跳过的视频（{{ lastCollectStats.videos_rejected.length }}）</summary>
+              <ul>
+                <li
+                  v-for="(v, i) in lastCollectStats.videos_rejected.slice(0, 8)"
+                  :key="i"
+                >
+                  {{ v.title || v.bvid || '—' }}
+                  <span v-if="v.reason" class="muted"> · {{ v.reason }}</span>
+                </li>
+              </ul>
+            </details>
+            <div v-if="lastCollectedBvid" class="result-links">
+              <RouterLink
+                class="link-out"
+                :to="{ path: '/reports', query: { bvid: lastCollectedBvid } }"
+              >
+                查看口碑 →
+              </RouterLink>
+              <RouterLink class="link-out" to="/sentiment">去情感页看进度 →</RouterLink>
+            </div>
+          </div>
           <p v-if="biliError" class="err status-line">{{ biliError }}</p>
         </div>
 
@@ -623,6 +667,44 @@ onMounted(async () => {
 }
 .status-line {
   margin-top: 0.65rem;
+}
+.gate-hint {
+  margin: 0.15rem 0;
+  font-size: 0.78rem;
+}
+.collect-result {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.stats-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stats-chips li {
+  padding: 0.2rem 0.55rem;
+  border-radius: 99px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.rejected-fold {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.rejected-fold ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+.result-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
 }
 .jobs-scroll {
   max-height: 9rem;

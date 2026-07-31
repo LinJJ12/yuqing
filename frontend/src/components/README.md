@@ -14,6 +14,7 @@
 | `layout/AppSidebar.vue` | 品牌 Logo「知微」、主导航、顶部收起 |
 | `layout/AppTopBar.vue` | 面包屑、后端连接状态、刷新 |
 | `PageHeader.vue` | 页面标题 + 副标题 + actions 插槽 |
+| `MarkdownContent.vue` | 助手回答/简报等 Markdown 安全渲染（marked + DOMPurify） |
 
 ## 禁止
 

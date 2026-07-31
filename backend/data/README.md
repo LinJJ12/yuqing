@@ -13,9 +13,10 @@
 data/
 ├── yuqing.db          # 主库（gitignore）
 ├── imports/           # 上传/转换落盘（gitignore）
-└── samples/           # 合成样例（可提交；勿放真实用户数据）
-    ├── campus_sample.json           # generate_sample_data.py
-    └── mediacrawler_xhs_fixture.json # 仿 MediaCrawler 字段
+└── samples/           # 合成样例 / 评测集（可提交；勿放真实用户数据）
+    ├── campus_sample.json            # generate_sample_data.py
+    ├── mediacrawler_xhs_fixture.json # 仿 MediaCrawler 字段
+    └── sentiment_eval.json           # eval_sentiment.py 黄金集（口碑向短句）
 ```
 
 ## 禁止

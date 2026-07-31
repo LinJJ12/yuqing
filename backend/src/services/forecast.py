@@ -102,7 +102,10 @@ def alert_from_post(
 
     topic = post.get("topic") or "未分类"
     author = post.get("author") or ""
-    title_tail = author or topic
+    extra = (post.get("raw") or {}).get("extra") or {}
+    video_title = (extra.get("video_title") or "").strip()
+    bvid = (extra.get("bvid") or "").strip()
+    title_tail = video_title or author or topic
     return {
         "id": f"post-{post['id']}",
         "type": "negative_content",
@@ -116,6 +119,9 @@ def alert_from_post(
         "keywords": hit,
         "created_at": post.get("fetched_at") or post.get("published_at"),
         "post_id": post["id"],
+        "bvid": bvid or None,
+        "source_url": post.get("source_url") or None,
+        "video_title": video_title or None,
     }
 
 
