@@ -46,9 +46,12 @@ async function onSubmit() {
 
 <template>
   <div class="login-page">
+    <div class="bg-grid" aria-hidden="true" />
+    <div class="bg-orb" aria-hidden="true" />
+
     <div class="login-card">
       <RouterLink class="brand" to="/">
-        <img :src="logoUrl" alt="" class="brand-logo" width="36" height="36" />
+        <img :src="logoUrl" alt="" class="brand-logo" width="40" height="40" />
         <div>
           <div class="brand-name">知微</div>
           <div class="brand-sub">本地观众反馈分析工作台</div>
@@ -98,67 +101,97 @@ async function onSubmit() {
 
 <style scoped>
 .login-page {
+  position: relative;
+  isolation: isolate;
   min-height: 100%;
   display: grid;
   place-items: center;
   padding: 1.5rem;
-  background:
-    radial-gradient(900px 420px at 20% 0%, rgba(15, 118, 110, 0.1), transparent 55%),
-    linear-gradient(180deg, #f8fafc, var(--bg-base));
+  overflow: hidden;
+  background: linear-gradient(165deg, #f8fafc 0%, #eef6f4 50%, #f1f5f9 100%);
+}
+
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image:
+    linear-gradient(rgba(15, 118, 110, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 118, 110, 0.045) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 10%, transparent 70%);
+}
+
+.bg-orb {
+  position: absolute;
+  z-index: -1;
+  width: min(70vw, 420px);
+  height: min(70vw, 420px);
+  top: 8%;
+  right: 12%;
+  border-radius: 50%;
+  background: rgba(15, 118, 110, 0.16);
+  filter: blur(36px);
+  animation: drift 16s ease-in-out infinite alternate;
 }
 
 .login-card {
   width: 100%;
-  max-width: 400px;
-  padding: 1.6rem 1.5rem 1.35rem;
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  max-width: 420px;
+  padding: 1.85rem 1.65rem 1.5rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 18px 40px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+  animation: fade-up 0.5s var(--ease-out) both;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.8rem;
   text-decoration: none;
   color: inherit;
-  margin-bottom: 1.35rem;
+  margin-bottom: 1.45rem;
 }
 
 .brand-logo {
-  border-radius: 8px;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .brand-name {
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .brand-sub {
-  margin-top: 0.1rem;
+  margin-top: 0.15rem;
   font-size: 0.75rem;
   color: var(--text-tertiary);
 }
 
 .title {
   margin: 0;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 1.45rem;
+  font-weight: 720;
+  letter-spacing: -0.03em;
 }
 
 .hint {
-  margin: 0.35rem 0 0;
+  margin: 0.4rem 0 0;
   font-size: 0.8125rem;
   color: var(--text-tertiary);
 }
 
 .form {
   display: grid;
-  gap: 0.85rem;
-  margin-top: 1.25rem;
+  gap: 0.9rem;
+  margin-top: 1.35rem;
 }
 
 .error {
@@ -169,12 +202,19 @@ async function onSubmit() {
 
 .submit {
   width: 100%;
-  margin-top: 0.25rem;
-  min-height: 40px;
+  margin-top: 0.3rem;
+  min-height: 42px;
+  border-radius: 8px;
+  transition: transform 160ms var(--ease-out), box-shadow 160ms;
+}
+
+.submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.2);
 }
 
 .footer {
-  margin: 1.1rem 0 0;
+  margin: 1.2rem 0 0;
   text-align: center;
   font-size: 0.8125rem;
   color: var(--text-tertiary);
@@ -183,10 +223,40 @@ async function onSubmit() {
 .footer a {
   color: var(--color-primary);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .footer a:hover {
   text-decoration: underline;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-14px, 18px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-card,
+  .bg-orb,
+  .submit {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 </style>
