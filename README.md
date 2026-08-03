@@ -45,6 +45,7 @@
 | 分析报告 | 全局汇总 + **单视频口碑**；PDF / CSV；可选 OpenAI 兼容摘要 |
 | 智能助手 | 基于库内数据的问答与简报（云端 LLM 或 Ollama Chat） |
 | 系统设置 | 情感缓存 / B 站 Cookie / Ollama / LLM 就绪检查 |
+| 首页 / 登录 | 营销首页；本地单管理员 JWT 登录；工作台路由守卫 |
 
 ---
 
@@ -52,10 +53,10 @@
 
 ```
 知微
-├── frontend/          Vue 3 + Vite（总览 · 监测 · 入库 · 洞察 · 预警 · 报告 · 助手 · 设置）
+├── frontend/          Vue 3 + Vite（首页 · 登录 · 总览 · 监测 · 入库 · 洞察 · 预警 · 报告 · 助手 · 设置）
 ├── backend/           FastAPI BFF
-│   ├── api/           HTTP 边界（与 frontend/src/api 垂直对齐）
-│   ├── services/      采集 · 情感 · 主题 · 预警 · 报告 · Agent · 就绪探测
+│   ├── api/           HTTP 边界（与 frontend/src/api 垂直对齐；含 /auth）
+│   ├── services/      鉴权 · 采集 · 情感 · 主题 · 预警 · 报告 · Agent · 就绪探测
 │   ├── storage/       SQLite
 │   └── config/        settings · CUDA · Ollama · Cookie（密钥只出自此处）
 ├── docs/              PRD · 定位 · 目录约定 · 架构图 · 采集 / 模型
@@ -92,7 +93,9 @@ npm run dev
 
 | 地址 | 说明 |
 |------|------|
-| `/` | 总览（空库时为首跑三步引导） |
+| `/` | 营销首页（公开） |
+| `/login` | 本地管理员登录（公开） |
+| `/overview` | 总览（需登录；空库时为首跑三步引导） |
 | `/monitor` | 舆情监测（贴 BV / 导入 / 清理） |
 | `/inbox` | 入库浏览（搜索 · 增删改 · 改判） |
 | `/insights` | 洞察（情感 · 词云话题；旧 `/sentiment` `/topics` 会重定向） |
@@ -100,6 +103,8 @@ npm run dev
 | `/reports` | 分析报告（单视频口碑 · 全局导出） |
 | `/agent` | 智能助手 |
 | `/settings` | 系统设置（就绪检查 · 敏感词） |
+
+默认管理员（可在 `backend/.env` 修改）：用户名 `admin`，密码 `zhiwei-local`。
 
 ### 演示前（防翻车）
 
@@ -161,6 +166,8 @@ node scripts/agent-session-check.mjs
 
 | 变量 | 用途 |
 |------|------|
+| `AUTH_USERNAME` / `AUTH_PASSWORD` / `JWT_SECRET` | 本地单管理员登录（默认 `admin` / `zhiwei-local`） |
+| `JWT_EXPIRE_HOURS` / `AUTH_DISABLED` | 令牌有效期；紧急跳过业务鉴权（勿演示开启） |
 | `HF_ENDPOINT` | HuggingFace 镜像（国内常用 `https://hf-mirror.com`） |
 | `SENTIMENT_MODEL_ID` / `DEVICE_PREFERENCE` | 情感模型与 cuda/cpu |
 | `EMBEDDING_BACKEND` / `OLLAMA_*` | 主题向量（默认本机 Ollama） |
@@ -176,8 +183,9 @@ node scripts/agent-session-check.mjs
 
 - **合并主线（A–F）**：脚手架 → 数据闭环 → GPU 情感 / 主题 → 预警趋势 → 报告导出 → B 站采集 + 轻量 Agent — 已交付
 - **产品打磨**：设置就绪曝光、空库首跑引导、情感未完成提示、监测门禁文案与成功态 — 已交付
-- **近程可选**：词典 vs BERT 实验表；Redis + RQ；多 BV / UP 聚合
-- **明确不做（一期）**：登录多租户、全网实时监听、把产品锁死在校园舆情
+- **首页与本地登录**：营销首页 `/`、总览迁至 `/overview`、JWT 单管理员鉴权 — 已交付
+- **近程可选**：词典 vs BERT 实验表；Redis + RQ；多 BV / UP 聚合深化
+- **明确不做（一期）**：多用户注册 / 多租户云 SaaS、全网实时监听、把产品锁死在校园舆情
 
 详情：[`docs/prd.md`](docs/prd.md) · [`docs/positioning.md`](docs/positioning.md) · [`.trellis/GATE.md`](.trellis/GATE.md)
 

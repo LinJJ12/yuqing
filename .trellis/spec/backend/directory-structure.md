@@ -29,6 +29,8 @@ backend/
 └── src/
     ├── api/                # FastAPI routers + app assembly
     │   ├── app.py
+    │   ├── deps.py         # require_user (JWT Bearer)
+    │   ├── auth.py         # /auth/login · /me · /logout
     │   ├── health.py
     │   ├── data.py         # imports, posts CRUD, dashboard
     │   ├── collect.py
@@ -36,10 +38,10 @@ backend/
     │   ├── alerts.py
     │   ├── reports.py
     │   └── agent.py
-    ├── services/           # single-capability modules (sentiment, topics, …)
+    ├── services/           # single-capability modules (auth, sentiment, topics, …)
     ├── storage/            # SQLite Store only
     ├── config/             # settings, device/CUDA, cookie helpers
-    └── lib/                # no-domain helpers (http ok/err)
+    └── lib/                # no-domain helpers (http ok/err, UnauthorizedError)
 ```
 
 ---
@@ -49,10 +51,10 @@ backend/
 | Layer | Put here | Do not put here |
 |-------|----------|-----------------|
 | `api/` | Pydantic bodies, Query params, status codes, call services/store | BERT/Ollama calls, SQL strings |
-| `services/` | ingest, bilibili collect/quality, sentiment, topics, forecast, report, agent | FastAPI `Request`, reading `.env` ad hoc |
+| `services/` | auth (JWT), ingest, bilibili collect/quality, sentiment, topics, forecast, report, agent | FastAPI `Request`, reading `.env` ad hoc |
 | `storage/` | `Store` CRUD, schema, filters (`bvid`, `q`) | LLM, HTTP clients |
 | `config/` | pydantic-settings, CUDA probe | business alert rules |
-| `lib/` | `ok` / `err` JSON helpers | domain types |
+| `lib/` | `ok` / `err` JSON helpers, auth error types | domain services |
 
 New HTTP capability: add or extend a router file under `api/`, register in `app.py` with prefix `/api/v1`, then mirror the client in `frontend/src/api/client.js`.
 

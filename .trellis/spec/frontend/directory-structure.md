@@ -7,13 +7,13 @@
 ```text
 frontend/
 ├── public/                 # favicon, public logo
-├── scripts/                # node smoke checks (agent-session-check.mjs)
+├── scripts/                # node smoke checks (agent-session / auth-guard)
 └── src/
     ├── api/client.js       # sole HTTP client
     ├── pages/              # one file per route view
     ├── router/index.js
     ├── components/         # shared UI (VideoScopePicker, layout, …)
-    ├── lib/                # non-UI helpers (agentSession, datetime)
+    ├── lib/                # non-UI helpers (auth, agentSession, datetime)
     ├── assets/
     ├── App.vue
     ├── main.js
@@ -27,10 +27,13 @@ frontend/
 | Path | Responsibility |
 |------|----------------|
 | `pages/*Page.vue` | Route UI; call `api/` + shared components |
-| `api/client.js` | `/api/v1` methods; parse `{ok,data,error}` |
+| `api/client.js` | `/api/v1` methods; parse `{ok,data,error}`; 401 → clear session |
+| `lib/auth.js` | Token/session + `safeInternalPath` + auth change event |
 | `lib/agentSession.js` | Multi-conversation agent state + persistence |
 | `components/layout/` | Sidebar / shell only |
 | `components/VideoScopePicker.vue` | Shared `?bvid=` scope control |
+| `scripts/auth-guard-check.mjs` | Router guard / redirect safety smoke |
+| `scripts/agent-session-check.mjs` | Agent conversation race smoke |
 
 New screen: add lazy route in `router/index.js`, page file, sidebar entry in `AppSidebar.vue`, and update `pages/README.md`.
 

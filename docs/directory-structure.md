@@ -78,6 +78,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 | `frontend/src/api/` | **唯一** HTTP 出口 | 在 pages 里裸 `axios`/`fetch` |
 | `frontend/src/pages/` | 路由级页面 | 直接拼后端 URL、持有密钥 |
 | `frontend/src/router/` | 路由表 | 业务请求 |
+| `frontend/src/lib/` | 非 UI 助手（鉴权会话、agentSession、时间格式） | 页面组件、裸调后端 URL |
 | `frontend/src/components/` | 可复用 UI 块（含 `layout/`） | 绕过 api 层发请求 |
 | `frontend/src/assets/` | 静态资源（含品牌 `logo.png`，侧栏 import） | 业务逻辑 |
 | `frontend/public/` | 公开静态（`logo.png` 作 favicon / 直链） | 业务逻辑 |
@@ -91,6 +92,7 @@ frontend/              # 一般不需要 Key；代理走 vite.config.js
 
 | 前端 `src/api/client.js` | 后端路由前缀 | 后端文件 |
 |--------------------------|--------------|----------|
+| login / fetchAuthMe / logoutApi | `/auth/login` `/auth/me` `/auth/logout` | `auth.py`（业务路由经 `deps.require_user`） |
 | health / overview / posts / imports / deletePosts | `/health*` `/dashboard` `/posts` `/posts/delete` `/imports` | `health.py` `data.py` |
 | collectBilibili | `/collect/bilibili` | `collect.py` |
 | sentiment / topics / analysis-jobs | `/analysis/*` `/analysis-jobs` | `analysis.py` |

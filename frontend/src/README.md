@@ -14,6 +14,7 @@
 | `api/` | Axios 封装与 typed 接口 |
 | `pages/` | 路由级页面 |
 | `router/` | Vue Router |
+| `lib/` | 非 UI 助手：`auth.js`（会话）、`agentSession.js`、`datetime.js` |
 | `components/` | 可复用 UI（可选） |
 | `assets/` | 静态资源（品牌 `logo.png`；公开副本见 `frontend/public/logo.png`） |
 

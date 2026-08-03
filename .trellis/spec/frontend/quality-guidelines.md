@@ -18,6 +18,7 @@
 cd frontend
 npm run build
 npm run test:agent-session
+npm run test:auth-guard
 ```
 
 If API shapes changed: `uv run pytest` from repo root as well.
