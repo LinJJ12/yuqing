@@ -37,6 +37,14 @@ function mergeAuthConfig(config = {}) {
   }
 }
 
+let redirectingToLogin = false
+let onUnauthorized = null
+
+/** 由 main.js 注入，避免 client ↔ router 静态环依赖 */
+export function setUnauthorizedHandler(handler) {
+  onUnauthorized = typeof handler === 'function' ? handler : null
+}
+
 function maybeClearSessionOnUnauthorized(url, status, data) {
   if (status !== 401) return
   if (typeof url === 'string' && url.startsWith('/auth/login')) return
@@ -47,6 +55,13 @@ function maybeClearSessionOnUnauthorized(url, status, data) {
     (typeof data === 'object' && data.ok === false)
   ) {
     clearSession()
+    if (redirectingToLogin || !onUnauthorized) return
+    redirectingToLogin = true
+    Promise.resolve()
+      .then(() => onUnauthorized())
+      .finally(() => {
+        redirectingToLogin = false
+      })
   }
 }
 

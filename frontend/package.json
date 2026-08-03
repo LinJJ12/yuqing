@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:agent-session": "node scripts/agent-session-check.mjs"
+    "test:agent-session": "node scripts/agent-session-check.mjs",
+    "test:auth-guard": "node scripts/auth-guard-check.mjs"
   },
   "dependencies": {
     "@lucide/vue": "^1.27.0",

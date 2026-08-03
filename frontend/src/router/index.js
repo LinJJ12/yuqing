@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { isAuthenticated } from '../lib/auth'
+import { isAuthenticated, safeInternalPath } from '../lib/auth'
 
 const routes = [
   {
@@ -134,11 +134,7 @@ router.beforeEach((to) => {
     }
   }
   if (to.name === 'login' && isAuthenticated()) {
-    const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : ''
-    // 仅允许站内相对路径，拒绝 //evil 协议相对 URL
-    const safe =
-      redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : ''
-    return safe || '/overview'
+    return safeInternalPath(to.query.redirect) || '/overview'
   }
   return true
 })

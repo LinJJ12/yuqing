@@ -6,6 +6,12 @@
 
 - History mode via `createWebHistory`
 - `meta.title` / `meta.subtitle` drive chrome headers
+- `meta.layout`: `public` (no sidebar) vs `app` (shell); `meta.requiresAuth` for workbench routes
+- Public: `/` home · `/login`; workbench overview at `/overview` (not `/`)
+- Guard (`router.beforeEach`): unauthenticated app routes → `/login?redirect=…`; authenticated `/login` → `/overview` (or safe relative redirect)
+- Redirect safety: `lib/auth.js` `safeInternalPath` — only `/…`, reject `//…`
+- Session change: `AUTH_CHANGED_EVENT` after `setSession` / `clearSession` (shell username + home CTA)
+- API 401 (non-login): `clearSession` + navigate to `/login` when on app layout (`setUnauthorizedHandler` from `main.js`)
 - Shareable scope: `?bvid=` on insights / alerts / reports / agent
 - Insights tabs: `?tab=sentiment|topics|tools` (default sentiment)
 
@@ -17,6 +23,7 @@ When writing links, preserve existing query keys you do not own (spread `route.q
 
 | Route | State notes |
 |-------|-------------|
+| `/` · `/login` | Public layout; session in `lib/auth.js` (`zhiwei.auth.*`); login uses `client.login` + `setSession` |
 | `/inbox` | Server pagination + `q`; selection `Set` replaced immutably for Vue reactivity |
 | `/insights` | Charts need `nextTick` after tab show; poll analysis-jobs while busy |
 | `/alerts` | `tab=review` for hard cases; override updates list |
@@ -32,6 +39,7 @@ When writing links, preserve existing query keys you do not own (spread `route.q
 - Global `state.error` / `notice` only update when `activeId` still matches the request’s conversation
 
 Regression script: `cd frontend && npm run test:agent-session` (`scripts/agent-session-check.mjs`).
+Auth guard script: `cd frontend && npm run test:auth-guard` (`scripts/auth-guard-check.mjs`).
 
 ---
 

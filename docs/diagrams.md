@@ -1,8 +1,8 @@
 # 知微：流程 · 思维导图 · 架构图
 
 > **知微** 是社交媒体舆情 / 观众反馈工作台：文件导入 / B 站评论采集 → 本地 GPU 情感 / 主题分析 → 趋势预警 → 报告导出。不局限于校园场景。  
-> **一期已结项：** Vue 3 工作台 + FastAPI BFF + SQLite；**无登录**；采集为文件导入。  
-> **二期已落地：** 外挂 MediaCrawler 转换导入；**内嵌 B 站评论采集**；轻量 Agent（问答 + 简报）。  
+> **一期已结项：** Vue 3 工作台 + FastAPI BFF + SQLite；采集为文件导入。  
+> **二期已落地：** 外挂 MediaCrawler 转换导入；**内嵌 B 站评论采集**；轻量 Agent（问答 + 简报）；**本地单管理员登录**（JWT Bearer）。  
 > 下图均为 Mermaid，可在支持 Mermaid 的编辑器中预览。目录细则见 [`directory-structure.md`](./directory-structure.md)，真实采集见 [`real-data-collection.md`](./real-data-collection.md)。
 
 ---
@@ -13,7 +13,8 @@
 
 ```mermaid
 flowchart TD
-    A[打开 Web 工作台<br/>http://127.0.0.1:5173] --> B[总览页看帖子量快照]
+    A[打开首页<br/>http://127.0.0.1:5173/] --> L[登录 /login]
+    L --> B[总览 /overview]
     B --> C{数据从哪来?}
     C -->|文件| C1[监测页上传 JSON / CSV]
     C -->|B 站| C2[监测页 B 站评论采集]
@@ -147,14 +148,14 @@ mindmap
       滑动平均加 Prophet
       analysis-jobs
       PDF CSV 云端LLM可选
-      无登录
     二期已落地
       外挂 MediaCrawler 转换导入
       内嵌 B 站评论采集
       监测平台选择
       轻量 Agent 问答与简报
+      首页与本地单管理员登录
     明确不做近期
-      登录鉴权
+      多用户注册与角色权限
       多 Agent 编排
       小红书抖音内嵌登录爬虫台
     另阶段可选
@@ -393,7 +394,9 @@ erDiagram
 
 ```mermaid
 flowchart TB
-    O["/ 总览"] --> M["/monitor 舆情监测"]
+    H["/ 首页"] --> L["/login 登录"]
+    L --> O["/overview 总览"]
+    O --> M["/monitor 舆情监测"]
     O --> I["/inbox 入库浏览"]
     O --> INS["/insights 洞察"]
     O --> A["/alerts 预警中心"]
@@ -410,8 +413,8 @@ flowchart TB
     SET -.->|改敏感词影响| A
 ```
 
-**已有：** 总览、监测（BV 采集 / 导入 / 噪声清理）、入库（搜索 · CRUD）、洞察（情感 + 话题，旧 `/sentiment` `/topics` 重定向）、预警（含 Prophet 趋势与难例改判）、报告（全局汇总 + 单视频口碑）、助手（多会话，可选 BV）、设置（健康 + 敏感词）。  
-**没有：** 登录页、家长/权限页、爬虫配置台、多 Agent 画布。
+**已有：** 首页 / 登录（本地单管理员）、总览、监测（BV 采集 / 导入 / 噪声清理）、入库（搜索 · CRUD）、洞察（情感 + 话题，旧 `/sentiment` `/topics` 重定向）、预警（含 Prophet 趋势与难例改判）、报告（全局汇总 + 单视频口碑）、助手（多会话，可选 BV）、设置（健康 + 敏感词）。  
+**没有：** 多用户注册/角色权限、家长页、爬虫配置台、多 Agent 画布。
 
 ---
 

@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { fetchHealthReady, logoutApi } from './api/client'
-import { clearSession, getUsername } from './lib/auth'
+import { AUTH_CHANGED_EVENT, clearSession, getUsername } from './lib/auth'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import AppTopBar from './components/layout/AppTopBar.vue'
 
@@ -16,11 +16,13 @@ const username = ref('')
 
 const isPublic = computed(() => route.meta.layout === 'public')
 
+function syncUsername() {
+  username.value = getUsername()
+}
+
 watch(
   () => [route.fullPath, route.meta.layout],
-  () => {
-    username.value = getUsername()
-  },
+  syncUsername,
   { immediate: true },
 )
 
@@ -51,14 +53,23 @@ async function onLogout() {
   }
 }
 
-onMounted(checkBackend)
+onMounted(() => {
+  checkBackend()
+  window.addEventListener(AUTH_CHANGED_EVENT, syncUsername)
+})
+
+onUnmounted(() => {
+  window.removeEventListener(AUTH_CHANGED_EVENT, syncUsername)
+})
 </script>
 
 <template>
   <div v-if="isPublic" class="public-shell">
     <RouterView v-slot="{ Component }">
       <transition name="page-fade" mode="out-in">
-        <component :is="Component" />
+        <div v-if="Component" class="public-page" :key="route.fullPath">
+          <component :is="Component" />
+        </div>
       </transition>
     </RouterView>
   </div>
@@ -88,5 +99,12 @@ onMounted(checkBackend)
 .public-shell {
   height: 100%;
   overflow: auto;
+  background: #ffffff;
+}
+
+.public-page {
+  box-sizing: border-box;
+  min-height: 100%;
+  height: 100%;
 }
 </style>

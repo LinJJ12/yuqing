@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { login as loginRequest } from '../api/client'
-import { setSession } from '../lib/auth'
+import { safeInternalPath, setSession } from '../lib/auth'
 import logoUrl from '../assets/logo.png'
 
 const router = useRouter()
@@ -32,10 +32,7 @@ async function onSubmit() {
       accessToken: res.data.access_token,
       username: res.data.user?.username || user,
     })
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-    const safe =
-      redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : ''
-    await router.replace(safe || '/overview')
+    await router.replace(safeInternalPath(route.query.redirect) || '/overview')
   } catch {
     error.value = '无法连接后端，请确认服务已启动'
   } finally {
@@ -46,9 +43,6 @@ async function onSubmit() {
 
 <template>
   <div class="login-page">
-    <div class="bg-grid" aria-hidden="true" />
-    <div class="bg-orb" aria-hidden="true" />
-
     <div class="login-card">
       <RouterLink class="brand" to="/">
         <img :src="logoUrl" alt="" class="brand-logo" width="40" height="40" />
@@ -108,44 +102,19 @@ async function onSubmit() {
   place-items: center;
   padding: 1.5rem;
   overflow: hidden;
-  background: linear-gradient(165deg, #f8fafc 0%, #eef6f4 50%, #f1f5f9 100%);
-}
-
-.bg-grid {
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  background-image:
-    linear-gradient(rgba(15, 118, 110, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 118, 110, 0.045) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: radial-gradient(circle at 50% 40%, #000 10%, transparent 70%);
-}
-
-.bg-orb {
-  position: absolute;
-  z-index: -1;
-  width: min(70vw, 420px);
-  height: min(70vw, 420px);
-  top: 8%;
-  right: 12%;
-  border-radius: 50%;
-  background: rgba(15, 118, 110, 0.16);
-  filter: blur(36px);
-  animation: drift 16s ease-in-out infinite alternate;
+  background: #ffffff;
 }
 
 .login-card {
   width: 100%;
   max-width: 420px;
   padding: 1.85rem 1.65rem 1.5rem;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+  border: 1px solid #94a3b8;
   border-radius: 14px;
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 18px 40px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(10px);
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 18px 40px rgba(15, 23, 42, 0.1);
   animation: fade-up 0.5s var(--ease-out) both;
 }
 
@@ -164,28 +133,33 @@ async function onSubmit() {
 }
 
 .brand-name {
-  font-size: 1.1rem;
+  font-family: 'Songti SC', 'SimSun', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', serif;
+  font-size: 1.2rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.06em;
+  color: #0b1220;
 }
 
 .brand-sub {
   margin-top: 0.15rem;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
 }
 
 .title {
   margin: 0;
   font-size: 1.45rem;
   font-weight: 720;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+  color: #0b1220;
 }
 
 .hint {
   margin: 0.4rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--text-tertiary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
 }
 
 .form {
@@ -216,8 +190,8 @@ async function onSubmit() {
 .footer {
   margin: 1.2rem 0 0;
   text-align: center;
-  font-size: 0.8125rem;
-  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  color: #64748b;
 }
 
 .footer a {
@@ -241,18 +215,8 @@ async function onSubmit() {
   }
 }
 
-@keyframes drift {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(-14px, 18px, 0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .login-card,
-  .bg-orb,
   .submit {
     animation: none !important;
     transition: none !important;
