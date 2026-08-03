@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   BellRing,
@@ -22,6 +22,72 @@ const features = [
   { icon: ScanSearch, label: '情感洞察', desc: '分布 · 词云 · 主题' },
   { icon: BellRing, label: '预警报告', desc: '异常提示与导出交付' },
 ]
+
+const chartBars = [42, 68, 55, 82, 60, 74, 48]
+
+const reduceMotion = ref(false)
+const previewActive = ref(false)
+const tiltX = ref(0)
+const tiltY = ref(0)
+const activeBar = ref(-1)
+const activeKpi = ref(-1)
+const activeNav = ref(0)
+
+const previewStyle = computed(() => {
+  if (reduceMotion.value) {
+    return { transform: 'none' }
+  }
+  const baseY = -5
+  const baseX = 2.5
+  const scale = previewActive.value ? 1.025 : 1
+  return {
+    transform: `perspective(1100px) rotateY(${baseY + tiltY.value}deg) rotateX(${baseX + tiltX.value}deg) scale(${scale})`,
+  }
+})
+
+function onPreviewEnter() {
+  previewActive.value = true
+}
+
+function onPreviewMove(event) {
+  if (reduceMotion.value) return
+  const el = event.currentTarget
+  const rect = el.getBoundingClientRect()
+  if (!rect.width || !rect.height) return
+  const nx = (event.clientX - rect.left) / rect.width - 0.5
+  const ny = (event.clientY - rect.top) / rect.height - 0.5
+  tiltY.value = nx * 12
+  tiltX.value = -ny * 9
+}
+
+function onPreviewLeave() {
+  previewActive.value = false
+  tiltX.value = 0
+  tiltY.value = 0
+  activeBar.value = -1
+  activeKpi.value = -1
+  activeNav.value = 0
+}
+
+function preferReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+let mediaQuery
+function onMotionChange(event) {
+  reduceMotion.value = event.matches
+  if (event.matches) onPreviewLeave()
+}
+
+onMounted(() => {
+  reduceMotion.value = preferReducedMotion()
+  mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  mediaQuery.addEventListener('change', onMotionChange)
+})
+
+onUnmounted(() => {
+  mediaQuery?.removeEventListener('change', onMotionChange)
+})
 </script>
 
 <template>
@@ -75,7 +141,7 @@ const features = [
             <span class="feature-icon" aria-hidden="true">
               <component :is="item.icon" :size="18" :stroke-width="1.75" />
             </span>
-            <div>
+            <div class="feature-text">
               <strong>{{ item.label }}</strong>
               <span>{{ item.desc }}</span>
             </div>
@@ -83,51 +149,93 @@ const features = [
         </ul>
       </section>
 
-      <aside class="hero-visual" aria-hidden="true">
-        <div class="preview-shell">
-          <div class="preview-side">
-            <div class="preview-brand">知微</div>
-            <div class="preview-nav preview-nav-active" />
-            <div class="preview-nav" />
-            <div class="preview-nav" />
-            <div class="preview-nav" />
+      <aside class="hero-visual">
+        <div
+          class="preview-stage"
+          :class="{ active: previewActive }"
+          :style="previewStyle"
+          @pointerenter="onPreviewEnter"
+          @pointermove="onPreviewMove"
+          @pointerleave="onPreviewLeave"
+        >
+          <div class="preview-shell">
+            <div class="preview-side">
+              <div class="preview-brand">知微</div>
+              <button
+                v-for="i in 4"
+                :key="i"
+                type="button"
+                class="preview-nav"
+                :class="{ active: activeNav === i - 1 || (!previewActive && i === 1) }"
+                tabindex="-1"
+                @pointerenter="activeNav = i - 1"
+              />
+            </div>
+            <div class="preview-main">
+              <div class="preview-top">
+                <span>总览</span>
+                <span class="preview-pill" :class="{ live: previewActive }">
+                  <i class="pill-dot" />
+                  服务正常
+                </span>
+              </div>
+              <div class="preview-kpis">
+                <div
+                  class="preview-kpi"
+                  :class="{ hot: activeKpi === 0 }"
+                  @pointerenter="activeKpi = 0"
+                  @pointerleave="activeKpi = -1"
+                >
+                  <small>帖子</small>
+                  <strong>12.4k</strong>
+                </div>
+                <div
+                  class="preview-kpi"
+                  :class="{ hot: activeKpi === 1 }"
+                  @pointerenter="activeKpi = 1"
+                  @pointerleave="activeKpi = -1"
+                >
+                  <small>负面占比</small>
+                  <strong class="neg">8.2%</strong>
+                </div>
+                <div
+                  class="preview-kpi preview-kpi-alert"
+                  :class="{ hot: activeKpi === 2 }"
+                  @pointerenter="activeKpi = 2"
+                  @pointerleave="activeKpi = -1"
+                >
+                  <small>预警</small>
+                  <strong>
+                    3
+                    <i class="alert-ping" :class="{ live: previewActive || activeKpi === 2 }" />
+                  </strong>
+                </div>
+              </div>
+              <div class="preview-chart" :class="{ hot: previewActive }">
+                <div class="chart-bars">
+                  <button
+                    v-for="(h, idx) in chartBars"
+                    :key="idx"
+                    type="button"
+                    class="chart-bar"
+                    :class="{ hot: activeBar === idx }"
+                    :style="{ '--h': `${h}%` }"
+                    tabindex="-1"
+                    @pointerenter="activeBar = idx"
+                    @pointerleave="activeBar = -1"
+                  />
+                </div>
+                <div class="chart-legend">
+                  <span class="legend-icons">
+                    <Inbox :size="14" :stroke-width="1.75" />
+                    <FileText :size="14" :stroke-width="1.75" />
+                  </span>
+                  <span class="legend-text">情感趋势 · 近 7 日</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="preview-main">
-            <div class="preview-top">
-              <span>总览</span>
-              <span class="preview-pill">服务正常</span>
-            </div>
-            <div class="preview-kpis">
-              <div class="preview-kpi">
-                <small>帖子</small>
-                <strong>12.4k</strong>
-              </div>
-              <div class="preview-kpi">
-                <small>负面占比</small>
-                <strong class="neg">8.2%</strong>
-              </div>
-              <div class="preview-kpi">
-                <small>预警</small>
-                <strong>3</strong>
-              </div>
-            </div>
-            <div class="preview-chart">
-              <div class="chart-bars">
-                <span style="--h: 42%" />
-                <span style="--h: 68%" />
-                <span style="--h: 55%" />
-                <span style="--h: 82%" />
-                <span style="--h: 60%" />
-                <span style="--h: 74%" />
-                <span style="--h: 48%" />
-              </div>
-              <div class="chart-legend">
-                <Inbox :size="14" />
-                <FileText :size="14" />
-                <span>情感趋势 · 近 7 日</span>
-              </div>
-            </div>
-          </div>
+          <p class="preview-hint">将鼠标移到预览区试试</p>
         </div>
       </aside>
     </main>
@@ -173,7 +281,7 @@ const features = [
   top: -12%;
   right: -8%;
   background: rgba(15, 118, 110, 0.18);
-  animation: drift 14s ease-in-out infinite alternate;
+  animation: drift 18s ease-in-out infinite alternate;
 }
 
 .bg-orb-b {
@@ -182,7 +290,7 @@ const features = [
   bottom: -18%;
   left: -6%;
   background: rgba(3, 105, 161, 0.12);
-  animation: drift 18s ease-in-out infinite alternate-reverse;
+  animation: drift 22s ease-in-out infinite alternate-reverse;
 }
 
 .home-nav {
@@ -305,7 +413,7 @@ const features = [
   font-size: 0.9375rem;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-  transition: transform 160ms var(--ease-out), box-shadow 160ms, background 160ms;
+  transition: transform 180ms var(--ease-out), box-shadow 180ms, background 180ms;
 }
 
 .btn-primary.btn-lg:hover:not(:disabled) {
@@ -325,42 +433,88 @@ const features = [
 .feature-item {
   display: flex;
   gap: 0.7rem;
-  align-items: flex-start;
+  align-items: center;
+  min-height: 64px;
   padding: 0.85rem 0.9rem;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(226, 232, 240, 0.95);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: border-color 180ms, box-shadow 180ms, transform 180ms;
+}
+
+.feature-item:hover {
+  border-color: rgba(15, 118, 110, 0.28);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
 }
 
 .feature-icon {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
-  flex-shrink: 0;
+  flex: 0 0 34px;
   border-radius: 8px;
   color: var(--color-primary);
   background: rgba(15, 118, 110, 0.1);
+  line-height: 0;
 }
 
-.feature-item strong {
+.feature-icon :deep(svg) {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.feature-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.feature-text strong {
   display: block;
   font-size: 0.8125rem;
   font-weight: 650;
+  line-height: 1.25;
   color: var(--home-ink);
 }
 
-.feature-item span {
+.feature-text span {
   display: block;
-  margin-top: 0.15rem;
   font-size: 0.75rem;
   color: var(--home-muted);
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .hero-visual {
   animation: fade-up 0.75s var(--ease-out) 0.18s both;
+}
+
+.preview-stage {
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  transition:
+    transform 90ms linear,
+    filter 420ms ease;
+  cursor: default;
+  will-change: transform;
+}
+
+.preview-stage:not(.active) {
+  transition:
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 420ms ease;
+}
+
+.preview-stage.active {
+  filter: drop-shadow(0 22px 36px rgba(15, 23, 42, 0.14));
 }
 
 .preview-shell {
@@ -373,9 +527,15 @@ const features = [
   border: 1px solid rgba(226, 232, 240, 0.95);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
-    0 24px 48px rgba(15, 23, 42, 0.08);
-  transform: perspective(1200px) rotateY(-6deg) rotateX(3deg);
-  transform-origin: center left;
+    0 18px 40px rgba(15, 23, 42, 0.07);
+  transition: box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms;
+}
+
+.preview-stage.active .preview-shell {
+  border-color: rgba(15, 118, 110, 0.28);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 28px 56px rgba(15, 118, 110, 0.14);
 }
 
 .preview-side {
@@ -394,14 +554,23 @@ const features = [
 }
 
 .preview-nav {
+  display: block;
+  width: 100%;
   height: 10px;
   margin: 0.45rem 0;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   background: #e2e8f0;
+  cursor: default;
+  transition:
+    background 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.preview-nav-active {
-  background: rgba(15, 118, 110, 0.35);
+.preview-nav.active {
+  background: rgba(15, 118, 110, 0.42);
+  transform: scaleX(1.04);
 }
 
 .preview-main {
@@ -421,13 +590,33 @@ const features = [
 }
 
 .preview-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-success);
   background: rgba(22, 163, 74, 0.08);
   border: 1px solid rgba(22, 163, 74, 0.18);
-  padding: 0.15rem 0.45rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 999px;
+  transition: background 280ms, border-color 280ms;
+}
+
+.preview-pill.live {
+  background: rgba(22, 163, 74, 0.14);
+  border-color: rgba(22, 163, 74, 0.3);
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.preview-pill.live .pill-dot {
+  animation: pulse-dot 1.8s ease-out infinite;
 }
 
 .preview-kpis {
@@ -443,6 +632,20 @@ const features = [
   border: 1px solid var(--color-border);
   background: #fff;
   box-shadow: inset 3px 0 0 var(--color-primary);
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 280ms,
+    box-shadow 280ms,
+    background 280ms;
+}
+
+.preview-kpi.hot {
+  transform: translateY(-3px);
+  border-color: rgba(15, 118, 110, 0.28);
+  background: #f8fffd;
+  box-shadow:
+    inset 3px 0 0 var(--color-primary),
+    0 8px 16px rgba(15, 118, 110, 0.1);
 }
 
 .preview-kpi small {
@@ -452,22 +655,52 @@ const features = [
 }
 
 .preview-kpi strong {
-  display: block;
+  position: relative;
+  display: inline-block;
   margin-top: 0.2rem;
   font-family: var(--font-mono);
   font-size: 1.05rem;
   letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 
 .preview-kpi .neg {
   color: var(--color-destructive);
 }
 
+.preview-kpi-alert strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.alert-ping {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-warning);
+  opacity: 0.75;
+  transition: opacity 220ms;
+}
+
+.alert-ping.live {
+  opacity: 1;
+  animation: pulse-warn 1.6s ease-out infinite;
+}
+
 .preview-chart {
+  position: relative;
+  overflow: hidden;
   padding: 0.85rem 0.9rem 0.75rem;
   border-radius: 12px;
   border: 1px solid var(--color-border);
   background: linear-gradient(180deg, #f8fafc, #fff);
+  transition: border-color 300ms, box-shadow 300ms;
+}
+
+.preview-chart.hot {
+  border-color: rgba(15, 118, 110, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.04);
 }
 
 .chart-bars {
@@ -478,28 +711,72 @@ const features = [
   margin-bottom: 0.65rem;
 }
 
-.chart-bars span {
+.chart-bar {
   flex: 1;
   height: var(--h);
+  padding: 0;
+  border: 0;
   border-radius: 6px 6px 2px 2px;
   background: linear-gradient(180deg, #14b8a6, #0f766e);
-  opacity: 0.85;
-  animation: bar-rise 0.9s var(--ease-out) both;
+  opacity: 0.72;
+  transform-origin: bottom center;
+  transform: scaleY(0.92);
+  cursor: default;
+  transition:
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 280ms ease,
+    filter 280ms ease;
 }
 
-.chart-bars span:nth-child(2) { animation-delay: 0.05s; }
-.chart-bars span:nth-child(3) { animation-delay: 0.1s; }
-.chart-bars span:nth-child(4) { animation-delay: 0.15s; }
-.chart-bars span:nth-child(5) { animation-delay: 0.2s; }
-.chart-bars span:nth-child(6) { animation-delay: 0.25s; }
-.chart-bars span:nth-child(7) { animation-delay: 0.3s; }
+.preview-stage.active .chart-bar {
+  opacity: 0.86;
+  transform: scaleY(1);
+}
+
+.chart-bar.hot {
+  opacity: 1;
+  transform: scaleY(1.12);
+  filter: brightness(1.08);
+}
 
 .chart-legend {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.55rem;
   color: var(--home-muted);
   font-size: 0.7rem;
+  line-height: 1;
+}
+
+.legend-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  line-height: 0;
+}
+
+.legend-icons :deep(svg) {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.legend-text {
+  line-height: 1.2;
+}
+
+.preview-hint {
+  margin: 0.7rem 0 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--home-muted);
+  opacity: 0.75;
+  transition: opacity 280ms;
+}
+
+.preview-stage.active .preview-hint {
+  opacity: 0;
 }
 
 @keyframes fade-up {
@@ -529,18 +806,31 @@ const features = [
     transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translate3d(-18px, 22px, 0);
+    transform: translate3d(-14px, 16px, 0);
   }
 }
 
-@keyframes bar-rise {
-  from {
-    transform: scaleY(0.35);
-    opacity: 0.35;
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
   }
-  to {
-    transform: scaleY(1);
-    opacity: 0.85;
+  70% {
+    box-shadow: 0 0 0 7px rgba(22, 163, 74, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
+}
+
+@keyframes pulse-warn {
+  0% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(217, 119, 6, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0);
   }
 }
 
@@ -549,8 +839,7 @@ const features = [
     grid-template-columns: 1fr;
   }
 
-  .preview-shell {
-    transform: none;
+  .preview-stage {
     max-width: 520px;
     margin: 0 auto;
   }
@@ -564,6 +853,10 @@ const features = [
   .nav-link {
     display: none;
   }
+
+  .preview-hint {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -571,10 +864,23 @@ const features = [
   .hero-copy,
   .hero-visual,
   .bg-orb,
-  .chart-bars span,
-  .btn-lg {
+  .pill-dot,
+  .alert-ping,
+  .btn-lg,
+  .feature-item,
+  .preview-stage,
+  .preview-kpi,
+  .chart-bar,
+  .preview-nav {
     animation: none !important;
     transition: none !important;
+  }
+
+  .preview-stage,
+  .btn-lg,
+  .feature-item,
+  .preview-kpi,
+  .chart-bar {
     transform: none !important;
   }
 }
