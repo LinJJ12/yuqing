@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { authHeaders, clearSession } from '../lib/auth'
 
 /**
  * 优先走 Vite 代理 `/api`；失败时直连后端。
@@ -26,16 +27,42 @@ function shouldFallback(status, data) {
   return status === 404 || status === 502 || status === 503 || status === 504 || data == null
 }
 
+function mergeAuthConfig(config = {}) {
+  return {
+    ...config,
+    headers: {
+      ...authHeaders(),
+      ...(config.headers || {}),
+    },
+  }
+}
+
+function maybeClearSessionOnUnauthorized(url, status, data) {
+  if (status !== 401) return
+  if (typeof url === 'string' && url.startsWith('/auth/login')) return
+  // JSON 业务 401，或 blob/空体（导出等 responseType: 'blob'）
+  if (
+    data == null ||
+    (typeof Blob !== 'undefined' && data instanceof Blob) ||
+    (typeof data === 'object' && data.ok === false)
+  ) {
+    clearSession()
+  }
+}
+
 async function withFallback(client, method, url, config = {}) {
+  const merged = mergeAuthConfig(config)
   try {
-    const res = await client.request({ method, url, ...config })
+    const res = await client.request({ method, url, ...merged })
+    maybeClearSessionOnUnauthorized(url, res.status, res.data)
     if (shouldFallback(res.status, res.data) && res.status !== 200) {
       const fallback = axios.create({
         baseURL: DIRECT,
         timeout: client.defaults.timeout,
         validateStatus: () => true,
       })
-      const retry = await fallback.request({ method, url, ...config })
+      const retry = await fallback.request({ method, url, ...merged })
+      maybeClearSessionOnUnauthorized(url, retry.status, retry.data)
       return retry
     }
     return res
@@ -45,12 +72,31 @@ async function withFallback(client, method, url, config = {}) {
       timeout: client.defaults.timeout,
       validateStatus: () => true,
     })
-    return fallback.request({ method, url, ...config })
+    const retry = await fallback.request({ method, url, ...merged })
+    maybeClearSessionOnUnauthorized(url, retry.status, retry.data)
+    return retry
   }
 }
 
 export async function fetchHealthReady() {
   const { data } = await withFallback(api, 'get', '/health/ready')
+  return data
+}
+
+export async function login(username, password) {
+  const { data } = await withFallback(api, 'post', '/auth/login', {
+    data: { username, password },
+  })
+  return data
+}
+
+export async function fetchAuthMe() {
+  const { data } = await withFallback(api, 'get', '/auth/me')
+  return data
+}
+
+export async function logoutApi() {
+  const { data } = await withFallback(api, 'post', '/auth/logout')
   return data
 }
 
@@ -253,17 +299,49 @@ export async function generateReportSummary({ with_ai = false } = {}) {
   return data
 }
 
-function exportUrl(path, params = {}) {
-  const qs = new URLSearchParams(params).toString()
-  return `${DIRECT}${path}${qs ? `?${qs}` : ''}`
-}
-
-export function reportCsvUrl({ with_ai = false } = {}) {
-  return exportUrl('/reports/export.csv', { with_ai })
-}
-
-export function reportPdfUrl({ with_ai = false } = {}) {
-  return exportUrl('/reports/export.pdf', { with_ai })
+/**
+ * 带 Bearer 下载报告导出（勿用裸 window.open：直连 URL 无法附带 Authorization）。
+ */
+export async function downloadReportExport(kind, { with_ai = false } = {}) {
+  const path = kind === 'pdf' ? '/reports/export.pdf' : '/reports/export.csv'
+  const res = await withFallback(api, 'get', path, {
+    params: { with_ai },
+    responseType: 'blob',
+  })
+  if (res.status !== 200 || !(res.data instanceof Blob)) {
+    let message = '导出失败'
+    try {
+      if (res.data instanceof Blob) {
+        const parsed = JSON.parse(await res.data.text())
+        if (parsed?.error?.message) message = parsed.error.message
+      }
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: { code: 'export_failed', message } }
+  }
+  const ctype = String(res.headers?.['content-type'] || '')
+  if (ctype.includes('application/json')) {
+    let message = '导出失败'
+    try {
+      const parsed = JSON.parse(await res.data.text())
+      if (parsed?.error?.message) message = parsed.error.message
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: { code: 'export_failed', message } }
+  }
+  const filename = kind === 'pdf' ? 'zhiwei-report.pdf' : 'zhiwei-report.csv'
+  const objectUrl = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objectUrl)
+  return { ok: true, data: { filename } }
 }
 
 export async function fetchAlertKeywords() {

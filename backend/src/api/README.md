@@ -12,8 +12,10 @@
 
 | 文件 | 路由域 |
 |------|--------|
-| `app.py` | 创建 `FastAPI` 应用、挂载各 router |
-| `health.py` | `/health/*` |
+| `app.py` | 创建 `FastAPI` 应用、挂载各 router；业务 router 挂 `require_user` |
+| `auth.py` | `/auth/login` `/auth/me` `/auth/logout`（公开 login；me 需 Bearer） |
+| `deps.py` | `require_user` 依赖 |
+| `health.py` | `/health/*`（公开） |
 | `data.py` | `/imports` `/posts`（含 CRUD、`q` 搜索） `/posts/review` `/posts/{id}/sentiment` `/posts/delete` `/dashboard/overview` |
 | `collect.py` | `/collect/bilibili`（含标题门禁 / 评论去噪参数） |
 | `analysis.py` | `/analysis/*` `/analysis-jobs` |

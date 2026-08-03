@@ -34,7 +34,7 @@ frontend/
 
 New screen: add lazy route in `router/index.js`, page file, sidebar entry in `AppSidebar.vue`, and update `pages/README.md`.
 
-Legacy redirects: `/sentiment` and `/topics` → `/insights?tab=…` (keep until bookmarks die).
+Legacy redirects: `/sentiment` and `/topics` → `/insights?tab=…` (keep until bookmarks die). Overview lives at `/overview`; `/` is the marketing home.
 
 ---
 

@@ -18,7 +18,6 @@ dependencies = [
     "tqdm>=4.66,<5",
     "Pillow>=10,<12",
     "tenacity>=8.2,<10",
-
     # —— Web API（合并后主用 FastAPI，保留 Flask 以便过渡跑通原仓）——
     "fastapi>=0.100,<1",
     "uvicorn[standard]>=0.23,<1",
@@ -29,7 +28,6 @@ dependencies = [
     "Flask>=2.3,<4",
     "Flask-Cors>=4,<7",
     "waitress>=3,<4",
-
     # —— NLP / 主题 / 趋势（新栈）——
     "scikit-learn>=1.2,<2",
     "scipy>=1.10,<2",
@@ -40,23 +38,19 @@ dependencies = [
     # 过渡期仍可能跑参考仓：
     "gensim>=4.3,<5",
     "statsmodels>=0.14,<1",
-
     # —— 任务队列 / 报告 ——
     "rq>=2,<3",
     "reportlab>=4,<5",
-
     # —— 存储 ——
     "sqlalchemy>=2.0,<3",
     "aiosqlite>=0.20,<1",
     "pymongo>=4.3,<5",
     "alembic>=1.12,<2",
-
     # —— GPU 情感：中文 BERT（transformers）——
     "torch>=2.7",
     "transformers>=4.40,<5",
     "sentence-transformers>=2.2,<5",
     "openai>=1.0,<2",
-
     # —— AI Agent / RAG（campus，合并后可选启用）——
     "langchain>=0.3,<1",
     "langchain-core>=0.3,<1",
@@ -66,12 +60,12 @@ dependencies = [
     "langchain-huggingface>=0.1,<1",
     "langgraph>=0.2,<1",
     "chromadb>=0.5,<1",
-
     # —— 采集辅助 ——
     "playwright>=1.45,<2",
     "aiofiles>=23.2,<25",
     "openpyxl>=3.1,<4",
     "typer>=0.12,<1",
+    "pyjwt>=2.8,<3",
 ]
 
 [project.optional-dependencies]

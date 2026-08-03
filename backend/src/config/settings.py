@@ -123,6 +123,14 @@ class Settings(BaseSettings):
     # B 站内嵌采集（可选 Cookie，提高搜索/评论成功率）
     bilibili_sessdata: str = ""
 
+    # 本地单管理员鉴权（无注册；改密需改环境变量并重启）
+    auth_username: str = "admin"
+    auth_password: str = "zhiwei-local"
+    jwt_secret: str = "zhiwei-dev-change-me-use-32bytes-min"
+    jwt_expire_hours: int = 168  # 7 天
+    # 仅测试/紧急：跳过业务 API 鉴权（默认关闭）
+    auth_disabled: bool = False
+
     @property
     def llm_api_key(self) -> str:
         return (self.openai_api_key or "").strip()

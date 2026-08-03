@@ -1,14 +1,16 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { RefreshCw } from '@lucide/vue'
+import { LogOut, RefreshCw } from '@lucide/vue'
 
 defineProps({
   backendOk: { type: Boolean, default: null },
   refreshing: { type: Boolean, default: false },
+  username: { type: String, default: '' },
+  loggingOut: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'logout'])
 
 const route = useRoute()
 const title = computed(() => route.meta.title || '知微')
@@ -39,6 +41,7 @@ const subtitle = computed(() => route.meta.subtitle || '')
         <span class="dot" aria-hidden="true" />
         {{ backendOk === true ? '服务正常' : backendOk === false ? '服务离线' : '检测中' }}
       </span>
+      <span v-if="username" class="user-chip" :title="username">{{ username }}</span>
       <button
         type="button"
         class="btn btn-ghost btn-icon"
@@ -47,6 +50,15 @@ const subtitle = computed(() => route.meta.subtitle || '')
         @click="emit('refresh')"
       >
         <RefreshCw :size="15" :class="{ spin: refreshing }" />
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm logout-btn"
+        :disabled="loggingOut"
+        @click="emit('logout')"
+      >
+        <LogOut :size="14" />
+        <span>{{ loggingOut ? '退出中' : '退出' }}</span>
       </button>
     </div>
   </header>
@@ -103,6 +115,22 @@ const subtitle = computed(() => route.meta.subtitle || '')
   align-items: center;
   gap: 0.45rem;
   flex-shrink: 0;
+}
+.user-chip {
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-border);
+}
+.logout-btn {
+  gap: 0.35rem;
 }
 .spin {
   animation: spin 0.8s linear infinite;

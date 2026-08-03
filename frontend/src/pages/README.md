@@ -4,14 +4,16 @@
 
 ## 职责
 
-- 每个文件对应一个路由视图：总览、监测、入库、洞察、预警、报告、助手、设置。
+- 每个文件对应一个路由视图：首页、登录、总览、监测、入库、洞察、预警、报告、助手、设置。
 - 组合 `api/` 与图表库（ECharts），不实现后端算法。
 
 ## 页面
 
 | 文件 | 路由 | 说明 |
 |------|------|------|
-| `OverviewPage.vue` | `/` | 库内快照；空库首跑引导 |
+| `HomePage.vue` | `/` | 营销首页（无侧栏） |
+| `LoginPage.vue` | `/login` | 本地管理员登录 |
+| `OverviewPage.vue` | `/overview` | 库内快照；空库首跑引导 |
 | `MonitorPage.vue` | `/monitor` | BV 采集（主）/ 关键词（次）/ 文件导入 / 噪声清理 |
 | `InboxPage.vue` | `/inbox` | 入库浏览：搜索 · 增删改 · 行内改判 · 批量删除 |
 | `InsightsPage.vue` | `/insights` | 情感跑批 · 分布 · 词云话题（旧 `/sentiment` `/topics` 会重定向） |

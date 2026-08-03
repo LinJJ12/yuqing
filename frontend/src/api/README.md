@@ -14,7 +14,9 @@
 |------|------|
 | `client.js` | Axios 实例与各资源方法 |
 
-主要方法：`collectBilibili`、`deletePosts`、`fetchVideoReport` / `fetchVideoSummaries`、`compareVideos`、`fetchUpSummaries` / `fetchUpReport`、`agentChat` / `agentBrief`（可传 `bvid`）、情感/主题/预警/报告导出等。
+主要方法：`login` / `fetchAuthMe` / `logoutApi`、`collectBilibili`、`deletePosts`、`fetchVideoReport` / `fetchVideoSummaries`、`compareVideos`、`fetchUpSummaries` / `fetchUpReport`、`agentChat` / `agentBrief`（可传 `bvid`）、`downloadReportExport`（CSV/PDF，带 Bearer）等。
+
+鉴权：请求自动附带 `Authorization: Bearer`（见 `lib/auth.js`）；业务接口 401 时清除本地会话。报告导出须走 `downloadReportExport`，勿对受保护路径使用裸 `window.open`。
 
 ## 禁止
 

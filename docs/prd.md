@@ -53,14 +53,15 @@
 | **分析报告** | 全局汇总；单视频口碑；**多 BV 对比**；CSV/PDF 导出；可选 AI 摘要；UP 聚合（需采集写入 mid） | `report` / `video_report` / `compare` |
 | **智能助手** | 多会话隔离问答与简报（可限定 BV）；切页不丢；请求代数防串写 | OpenAI 兼容或 Ollama Chat；`frontend/src/lib/agentSession.js` |
 | **系统设置** | 情感模型 / Ollama / 云端 LLM / B 站 Cookie 就绪检查；设备信息；敏感词 | readiness |
+| **首页 / 登录** | 营销式首页；本地单管理员登录 / 登出；工作台路由守卫 | JWT Bearer；业务 API 401；`AUTH_*` 环境变量 |
 
-路由要点：主路径为 `/` · `/monitor` · `/inbox` · `/insights` · `/alerts` · `/reports` · `/agent` · `/settings`。旧 `/sentiment`、`/topics` 重定向到 `/insights`（带 `tab`）。
+路由要点：公开 `/`（首页）· `/login`；工作台 `/overview` · `/monitor` · `/inbox` · `/insights` · `/alerts` · `/reports` · `/agent` · `/settings`。旧 `/sentiment`、`/topics` 重定向到 `/insights`（带 `tab`）。
 
 ### 4.2 明确不做（当前边界）
 
 | 不做 | 原因 |
 |------|------|
-| 登录 / 多用户权限 | 一期本地单机工作台 |
+| 多用户注册 / 角色权限 / OAuth | 本地单管理员凭证即可；不做多租户 |
 | TextCNN / LDA / ARIMA / SIR | 已替换为 BERT / BERTopic / 滑动平均·Prophet / 增长率峰值 |
 | 全平台自动调度爬虫中台 | 采集以 B 站内嵌 + 可选外挂 MediaCrawler 为主 |
 | 实时流式全网监听 | 当前为按需拉取与文件导入 |
@@ -72,10 +73,11 @@
 ## 5. 用户主路径
 
 ```text
-① 监测页贴 BV（或导入文件）→ 入库
-② 洞察页跑情感 / 看词云（或采集后自动入队）
-③ 入库页可搜索核对；总览 / 预警看异常 → 报告页出全局或单视频口碑
-④ （可选）助手页多会话问答 / 生成简报 → PDF/CSV 交付
+① 首页进入 → 登录（本地管理员）→ 总览
+② 监测页贴 BV（或导入文件）→ 入库
+③ 洞察页跑情感 / 看词云（或采集后自动入队）
+④ 入库页可搜索核对；总览 / 预警看异常 → 报告页出全局或单视频口碑
+⑤ （可选）助手页多会话问答 / 生成简报 → PDF/CSV 交付
 ```
 
 演示防翻车：启动前按 [`model-cache.md`](./model-cache.md) 预取模型并确认设置页就绪。

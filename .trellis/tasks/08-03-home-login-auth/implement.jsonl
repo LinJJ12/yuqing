@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新 auth API/service 分层与注册方式"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "401/登录失败统一 ok/err 信封与错误码"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "pytest 夹具与 API 测试约定"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "新页面、router、lib/auth 放置约定"}
+{"file": ".trellis/spec/frontend/api-client.md", "reason": "client.js 同步规则与 Bearer 拦截器"}
+{"file": ".trellis/spec/frontend/pages-and-state.md", "reason": "页面状态与路由 meta 模式"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "前后端鉴权契约与路由迁移一致性"}

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "验收时核对测试与错误处理质量"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对 unauthorized / invalid_credentials 契约"}
+{"file": ".trellis/spec/frontend/api-client.md", "reason": "核对 client 与后端 auth 面同步"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量与构建检查"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "跨层：守卫、401、文档路由表一致"}
+{"file": "docs/prd.md", "reason": "产品文档「不做登录」与路由表需已更新"}

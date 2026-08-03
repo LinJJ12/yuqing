@@ -39,7 +39,7 @@ const groups = [
   {
     label: '工作台',
     items: [
-      { to: '/', label: '总览', icon: LayoutDashboard, exact: true },
+      { to: '/overview', label: '总览', icon: LayoutDashboard, exact: true },
       { to: '/reports', label: '报告', icon: FileText },
     ],
   },
@@ -67,7 +67,7 @@ const groups = [
 ]
 
 function isActive(item) {
-  if (item.exact) return route.path === '/'
+  if (item.exact) return route.path === item.to
   return route.path === item.to || route.path.startsWith(`${item.to}/`)
 }
 </script>

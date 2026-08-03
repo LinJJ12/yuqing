@@ -11,9 +11,8 @@ import {
   fetchUpSummaries,
   fetchVideoReport,
   fetchVideoSummaries,
+  downloadReportExport,
   generateReportSummary,
-  reportCsvUrl,
-  reportPdfUrl,
 } from '../api/client'
 
 const route = useRoute()
@@ -659,12 +658,12 @@ async function onVideoAiConclusion() {
   }
 }
 
-function openExport(kind) {
-  const url =
-    kind === 'pdf'
-      ? reportPdfUrl({ with_ai: withAiExport.value })
-      : reportCsvUrl({ with_ai: withAiExport.value })
-  window.open(url, '_blank')
+async function openExport(kind) {
+  error.value = ''
+  const res = await downloadReportExport(kind, { with_ai: withAiExport.value })
+  if (!res.ok) {
+    error.value = res.error?.message || '导出失败'
+  }
 }
 
 function severityClass(level) {
