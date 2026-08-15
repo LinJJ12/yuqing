@@ -22,6 +22,18 @@
   <b>仅供学习 / 教学 / 非营利研究，禁止商用。</b>详见 <a href="LICENSE">LICENSE</a>。
 </p>
 
+<p align="center">
+  <a href="docs/知微界面图片.docx"><b>查看产品界面预览</b></a>
+</p>
+
+---
+
+## 界面预览
+
+想先看长什么样再决定要不要跑：直接打开 **[产品界面图片](docs/知微界面图片.docx)**（首页、登录、总览、监测、洞察、预警、报告等截图汇总）。
+
+> GitHub 无法在线预览 `.docx`，请下载后用 Word / WPS 查看。若你有导出的 PNG，也可后续嵌到本段直接展示。
+
 ---
 
 ## 做什么
@@ -208,7 +220,7 @@ Cursor 内可用：`/trellis-continue`、`/trellis-finish-work`；Agent：`trell
 ## 文档
 
 - [许可（教育非商业 · 禁止商用）](LICENSE)
-- [产品界面 ](docs/知微界面图片.docx)
+- [产品界面预览](docs/知微界面图片.docx)（文首亦有入口）
 - [产品需求 PRD](docs/prd.md)
 - [定位与演进](docs/positioning.md)
 - [流程 / 架构图](docs/diagrams.md)
