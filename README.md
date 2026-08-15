@@ -205,6 +205,7 @@ Cursor 内可用：`/trellis-continue`、`/trellis-finish-work`；Agent：`trell
 
 ## 文档
 
+- [产品界面 ](docs/知微界面图片.docx)
 - [产品需求 PRD](docs/prd.md)
 - [定位与演进](docs/positioning.md)
 - [流程 / 架构图](docs/diagrams.md)
