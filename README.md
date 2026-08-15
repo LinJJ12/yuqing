@@ -12,12 +12,14 @@
   <img src="https://img.shields.io/badge/FastAPI-0.100+-red" alt="FastAPI" />
   <img src="https://img.shields.io/badge/uv-managed-informational" alt="uv" />
   <img src="https://img.shields.io/badge/GPU-optional-lightgrey" alt="GPU optional" />
+  <img src="https://img.shields.io/badge/License-Non--Commercial-orange" alt="Non-Commercial" />
 </p>
 
 <p align="center">
   本地可运行的社交媒体<strong>观众反馈 / 内容口碑</strong>分析工作台。<br />
   以 B 站评论为主：采集 → 情感 / 主题 / 趋势 → 预警与单视频口碑报告。<br />
-  属舆情分析，主战场是内容口碑，而非全网危机监测；校园样例仅为可选演示数据。
+  属舆情分析，主战场是内容口碑，而非全网危机监测；校园样例仅为可选演示数据。<br />
+  <b>仅供学习 / 教学 / 非营利研究，禁止商用。</b>详见 <a href="LICENSE">LICENSE</a>。
 </p>
 
 ---
@@ -74,8 +76,7 @@ Key 只放 `backend/.env`，前端不持模型密钥。目录细则见 [`docs/di
 **环境**：Python **3.11–3.12**（根目录 `uv` + `.venv`）+ Node.js 18+。GPU（CUDA）可选，用于加速情感推理。
 
 ```powershell
-# 依赖（仓库根）
-cd C:\Users\Administrator\Desktop\yuqing
+# 依赖（仓库根目录）
 uv sync
 # 开发依赖（含 pytest）：uv sync --extra dev
 
@@ -104,7 +105,8 @@ npm run dev
 | `/agent` | 智能助手 |
 | `/settings` | 系统设置（就绪检查 · 敏感词） |
 
-默认管理员（可在 `backend/.env` 修改）：用户名 `admin`，密码 `zhiwei-local`。
+默认管理员（可在 `backend/.env` 修改）：用户名 `admin`，密码 `zhiwei-local`。  
+**首次部署请立刻修改** `AUTH_PASSWORD` 与 `JWT_SECRET`，勿把真实 Cookie / API Key 提交到 Git。
 
 ### 演示前（防翻车）
 
@@ -205,6 +207,7 @@ Cursor 内可用：`/trellis-continue`、`/trellis-finish-work`；Agent：`trell
 
 ## 文档
 
+- [许可（教育非商业 · 禁止商用）](LICENSE)
 - [产品界面 ](docs/知微界面图片.docx)
 - [产品需求 PRD](docs/prd.md)
 - [定位与演进](docs/positioning.md)
@@ -220,6 +223,15 @@ Cursor 内可用：`/trellis-continue`、`/trellis-finish-work`；Agent：`trell
 
 ---
 
-## 许可与贡献
+## 许可与使用限制
 
-私有仓库。改需求请先对照 [`docs/prd.md`](docs/prd.md) 与 [`docs/positioning.md`](docs/positioning.md)；改接口须同步 `backend/src/api/` 与 `frontend/src/api/`。
+本项目采用 **[教育非商业使用许可](LICENSE)**：
+
+| 允许 | 禁止 |
+|------|------|
+| 个人学习、教学演示、大创 / 毕设、非营利学术研究 | **任何商用**（付费产品、SaaS、有偿咨询/交付、商业舆情监测等） |
+| 非商业前提下的复制、修改与再分发（须保留本许可） | 移除版权声明，或以允许商用的许可再授权 |
+
+采集相关功能须自行遵守目标平台 ToS 与当地法律；密钥与 Cookie 仅放本机 `backend/.env`。第三方依赖与 `vendor/` 仍遵循其各自原许可。商用请另行书面授权。
+
+改需求请先对照 [`docs/prd.md`](docs/prd.md) 与 [`docs/positioning.md`](docs/positioning.md)；改接口须同步 `backend/src/api/` 与 `frontend/src/api/`。

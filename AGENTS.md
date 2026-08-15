@@ -2,6 +2,8 @@
 
 产品名：**知微**。本地「观众反馈 / 内容口碑」分析工作台；属舆情分析，主战场非全网危机监测。不局限于校园：以 B 站评论口碑为主，校园样例为可选演示数据。
 
+**许可**：仅供学习 / 教学 / 非营利研究，**禁止商用**。见 [`LICENSE`](LICENSE)。
+
 - 产品需求（面向谁 / 功能 / 能做什么）：[`docs/prd.md`](docs/prd.md)
 - 定位与演进（是否舆情、下一步）：[`docs/positioning.md`](docs/positioning.md)
 - 文档索引：[`docs/README.md`](docs/README.md)

@@ -11,19 +11,20 @@
 
 | 问题 | 文档 |
 |------|------|
+| 许可？能否商用？ | [`../LICENSE`](../LICENSE)（**仅学习 / 非营利，禁止商用**） |
 | 面向谁？有哪些功能？能做什么？ | [`prd.md`](./prd.md) |
 | 还算舆情吗？定位是什么？以后做成什么？ | [`positioning.md`](./positioning.md) |
 | 文件夹怎么分？改接口改哪？ | [`directory-structure.md`](./directory-structure.md) |
 | 数据怎么流、架构长什么样？ | [`diagrams.md`](./diagrams.md) |
 | 演示前模型怎么准备？ | [`model-cache.md`](./model-cache.md) |
-| 真实 B 站数据怎么采？ | [`real-data-collection.md`](./real-data-collection.md) |
+| 真实 B 站数据怎么采？合规注意什么？ | [`real-data-collection.md`](./real-data-collection.md) |
 | Trellis / AI 协作怎么用？ | [`../.trellis/README.md`](../.trellis/README.md) |
 
 ## 文件
 
 | 文件 | 说明 |
 |------|------|
-| `知微界面图片.docx` | **产品界面** | [`知微界面图片.docx`](./知微界面图片.docx) |
+| `知微界面图片.docx` | 产品界面截图汇总 |
 | `prd.md` | **产品需求**：用户、价值、功能范围、主路径、验收 |
 | `positioning.md` | **定位与演进**：口碑工作台定位、舆情属性、路线图 |
 | `directory-structure.md` | **主规范**：顶层职责、分层、API 对照表 |
@@ -34,5 +35,6 @@
 
 ## 禁止
 
-- 放入可执行业务代码、模型权重、`.env` 密钥
+- 放入可执行业务代码、模型权重、`.env` 密钥、真实 Cookie / 隐私数据
 - 把仅后端细节写在这里而不回写 `backend/src/**/README.md`
+- 在文档中暗示本项目可用于商用（许可为教育非商业，见 [`LICENSE`](../LICENSE)）

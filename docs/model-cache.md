@@ -18,7 +18,7 @@
 小黄金集评测：`uv run python backend/scripts/eval_sentiment.py`
 
 ```powershell
-cd C:\Users\Administrator\Desktop\yuqing
+# 在仓库根目录
 
 # 确认 backend/.env 有镜像（国内推荐）
 # HF_ENDPOINT=https://hf-mirror.com

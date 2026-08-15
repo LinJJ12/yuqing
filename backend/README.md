@@ -23,7 +23,7 @@ backend/
 在仓库根目录（共用根 `.venv`）：
 
 ```powershell
-cd C:\Users\Administrator\Desktop\yuqing
+# 在仓库根目录
 uv run python backend/main.py --reload --port 8001
 ```
 
@@ -39,3 +39,5 @@ uv run python backend/main.py --reload --port 8001
 - `storage/` 依赖 `api/`
 - 把业务逻辑堆进 `lib/`
 - 运行时 `import vendor/`
+
+许可：仓库根 [`LICENSE`](../LICENSE)（仅学习 / 非营利，禁止商用）。

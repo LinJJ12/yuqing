@@ -52,3 +52,5 @@ npm run test:agent-session
 - 页面内裸 `fetch`/`axios` 直连后端（统一走 `src/api/`）
 - 持有模型 Key、SQLite、推理逻辑
 - 依赖 `vendor/` 或 `backend/src`
+
+许可：仓库根 [`LICENSE`](../LICENSE)（仅学习 / 非营利，禁止商用）。

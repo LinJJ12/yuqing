@@ -1,0 +1,99 @@
+知微 教育非商业使用许可
+Education and Non-Commercial Use License
+
+Copyright (c) 2026 知微作者与贡献者 (Zhiwei authors and contributors)
+
+----------------------------------------------------------------------
+中文（正文以中文为准；英文为对照翻译）
+----------------------------------------------------------------------
+
+一、许可范围
+
+在遵守本许可全部条款的前提下，版权方授予你一项免费、非独占、不可转让、
+可撤销的权利：仅可将本软件及相关文档（合称「本软件」）用于以下非商业目的：
+
+  1. 个人学习与技术研究；
+  2. 教学、课程实验、大创 / 毕业设计等非商业演示与答辩；
+  3. 非营利性学术研究与论文复现（成果中须注明来源）。
+
+二、明确禁止
+
+未经版权方事先书面授权，禁止将本软件或其修改版 / 衍生作品用于任何商业目的，
+包括但不限于：
+
+  1. 销售、出租、收费分发本软件，或将其作为付费产品 / SaaS / 咨询交付的核心组件；
+  2. 在公司、商业团队或营利项目中部署本软件以提供对外有偿服务；
+  3. 将本软件用于广告投放、商业舆情监测、商业竞品分析等营利性业务；
+  4. 移除或篡改版权与许可声明后继续分发。
+
+「商业目的」包括直接营利与间接营利（例如以本软件获取客户、合同或商业数据优势）。
+
+三、分发与修改
+
+你可以复制、修改本软件，并在非商业前提下向他人分发，但须同时满足：
+
+  1. 保留本 LICENSE 全文及所有版权声明；
+  2. 明确标注修改内容（如有）及原项目来源；
+  3. 以相同的非商业限制再许可下游使用者（不得改为允许商用的许可）。
+
+四、数据采集与平台规则（重要）
+
+本软件可能包含或调用面向第三方平台的数据采集能力。你使用采集相关功能时：
+
+  1. 须自行遵守目标平台的服务条款（ToS）、robots 规则及所在地法律法规；
+  2. 不得将 Cookie、密钥、真实用户隐私或未脱敏数据提交至公开仓库或对外泄露；
+  3. 版权方不对你因违规采集、滥用数据或违反平台规则而产生的任何后果负责。
+
+五、第三方组件
+
+本仓库依赖及 `vendor/` 等第三方代码 / 模型各自遵循其原有许可证；本许可不改变
+这些第三方许可。若与本许可冲突，就该第三方部分以其原许可为准。
+
+六、无担保与责任限制
+
+本软件按「现状（AS IS）」提供，不提供任何明示或暗示担保，包括适销性、
+特定用途适用性与不侵权。在法律允许的最大范围内，版权方不对因使用或
+无法使用本软件而导致的任何直接、间接、附带或后果性损害承担责任。
+
+七、终止
+
+一旦你违反本许可，本许可自动终止。终止后你必须停止使用并销毁相关副本
+（法律强制要求保留的除外）。
+
+八、其他
+
+未在本许可中明示授予的权利均由版权方保留。如需商用授权，请联系版权方
+另行签署书面协议。
+
+----------------------------------------------------------------------
+English (courtesy translation; Chinese text prevails in case of conflict)
+----------------------------------------------------------------------
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, and redistribute the Software solely for non-commercial purposes,
+including personal learning, teaching, non-profit academic research, and
+non-commercial student / course demonstrations — subject to the following:
+
+1. Commercial use is prohibited without prior written permission from the
+   copyright holders. This includes selling, renting, offering paid services,
+   SaaS, consulting deliverables built around the Software, or any other use
+   primarily intended for commercial advantage or monetary compensation.
+
+2. Redistributions (modified or not) must retain this license and copyright
+   notices, document material changes, and keep the same non-commercial terms.
+
+3. Any data-collection features must be used in compliance with third-party
+   platform terms of service and applicable law. Do not commit secrets, cookies,
+   or personal data to public repositories. The copyright holders are not liable
+   for misuse of collection features.
+
+4. Third-party dependencies and materials under `vendor/` remain under their
+   own licenses.
+
+5. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. TO THE
+   MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDERS SHALL NOT BE LIABLE
+   FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE.
+
+Any rights not expressly granted are reserved. For commercial licensing,
+contact the copyright holders for a separate written agreement.
